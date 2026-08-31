@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'data/bank_question_repository.dart';
 import 'data/db.dart';
 import 'data/person_repository.dart';
+import 'data/segment_repository.dart';
+import 'data/session_repository.dart';
 import 'screens/archive_screen.dart';
 import 'screens/people_screen.dart';
 import 'screens/settings_screen.dart';
@@ -21,7 +24,10 @@ Future<void> main() async {
 
 class JaddatiApp extends StatelessWidget {
   JaddatiApp({super.key, required Database db})
-      : people = PersonRepository(db);
+      : people = PersonRepository(db),
+        sessions = SessionRepository(db),
+        segments = SegmentRepository(db),
+        bank = BankQuestionRepository(db);
 
   /// Built once and handed to the screens that need it.
   ///
@@ -29,6 +35,9 @@ class JaddatiApp extends StatelessWidget {
   /// the top and pass it down. No service locator, no provider, no global.
   /// A screen's constructor states exactly what that screen can reach.
   final PersonRepository people;
+  final SessionRepository sessions;
+  final SegmentRepository segments;
+  final BankQuestionRepository bank;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +73,12 @@ class JaddatiApp extends StatelessWidget {
         SettingsScreen.route: (_) => const SettingsScreen(),
       },
 
-      home: PeopleScreen(people: people),
+      home: PeopleScreen(
+        people: people,
+        sessions: sessions,
+        segments: segments,
+        bank: bank,
+      ),
     );
   }
 }

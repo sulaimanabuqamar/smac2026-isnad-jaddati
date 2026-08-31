@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../data/bank_question_repository.dart';
 import '../data/person_repository.dart';
+import '../data/segment_repository.dart';
+import '../data/session_repository.dart';
+import '../services/audio_service.dart';
 import '../models/person.dart';
 import '../theme.dart';
 import '../widgets/bilingual.dart';
@@ -16,9 +20,18 @@ import 'settings_screen.dart';
 /// package. There is one piece of state on this screen — the list — and one
 /// event that changes it: coming back from somewhere that added a person.
 class PeopleScreen extends StatefulWidget {
-  const PeopleScreen({super.key, required this.people});
+  const PeopleScreen({
+    super.key,
+    required this.people,
+    required this.sessions,
+    required this.segments,
+    required this.bank,
+  });
 
   final PersonRepository people;
+  final SessionRepository sessions;
+  final SegmentRepository segments;
+  final BankQuestionRepository bank;
 
   @override
   State<PeopleScreen> createState() => _PeopleScreenState();
@@ -49,6 +62,26 @@ class _PeopleScreenState extends State<PeopleScreen> {
       ),
     );
     if (added ?? false) await _load();
+  }
+
+  /// A fresh AudioService per interview. It owns a platform recorder, and
+  /// keeping one alive for the life of the app would hold the microphone
+  /// open between sessions.
+  Future<void> _openInterview(Person person) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InterviewScreen(
+          person: person,
+          sessions: widget.sessions,
+          segments: widget.segments,
+          bank: widget.bank,
+          audio: AudioService(),
+        ),
+      ),
+    );
+    // Counts change when a session is started or finished, so the list is
+    // stale the moment we come back from an interview.
+    await _load();
   }
 
   @override
@@ -87,11 +120,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
               itemCount: people.length,
               itemBuilder: (context, i) => _PersonCard(
                 summary: people[i],
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => InterviewScreen(person: people[i].person),
-                  ),
-                ),
+                onTap: () => _openInterview(people[i].person),
               ),
             ),
           ),
