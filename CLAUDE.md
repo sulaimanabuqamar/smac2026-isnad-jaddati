@@ -35,12 +35,9 @@ as of Slice 1. The orientation-deck rules above are unchanged and still bind:
 in particular, all AI usage must still be documented in the report, and the
 GitHub trail must still show the team's own development.
 
-> **TODO — Sulaiman:** paste the exact wording of Dr. Otrok's email in place
-> of this block, and record its date and sender. This paragraph is a summary
-> written from a verbal description of the email, not a quotation from it. It
-> must be replaced with the real text before submission, because the approval
-> is the sole basis for AI-written code in this repo and a judge is entitled
-> to see it.
+Dr. Hadi Otrok, SMAC steering committee, 31 August 2026:
+"Yes. The rules have been updated, and the use of AI is 100% allowed
+for all parts of the competition."
 
 What did *not* change: rules 2 through 6, the reliability rule, the
 architecture decisions, and the requirement that every member can defend
