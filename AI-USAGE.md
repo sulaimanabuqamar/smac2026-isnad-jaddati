@@ -225,3 +225,104 @@ is in `docs/walkthrough-slice1.md`, written for exactly this purpose — so
 that the Q&A is a conversation about decisions rather than a defence of code
 we cannot account for. `docs/qa-slice1.md` includes the question of who wrote
 the code, and the answer we give is the true one.
+
+## 2026-09-01 — Sulaiman — Claude Code (CLI) — overnight
+
+### 1. Follow-up question validation — verdict: **48 of 63 grounded (76%)**
+
+**Prompt:** Run the pipeline spike over 20 clips and judge the generated
+follow-up questions honestly — does each refer to a person, place, object or
+event the speaker actually mentioned, or is it a generic prompt dressed up in
+dialect? Say so plainly if most are generic.
+
+**What happened first.** The run failed immediately, the same way it failed on
+31 August, and the exponential backoff added since then could not have helped.
+The 429 body says why: the quota is
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **limit 20 per day**, not
+per minute. Backoff retries against a wall that does not move until midnight.
+
+The quota is per model, so the spike was patched to rotate across
+`gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite` and
+`gemini-3.1-flash-lite`, retiring a model when its daily quota is gone. All 21
+clips then completed with zero failures, entirely on `gemini-3.6-flash`.
+(`spike/` is outside the repo, so that patch is not in this history.
+`spike/pipeline.py.bak` is the original.)
+
+**The verdict, counted rather than felt.** 63 questions, three per clip:
+
+- **48 of 63 (76%) are genuinely grounded** — they name a person, place,
+  object or event that appears in the transcript.
+- **11 of 21 clips (52%) scored 3 out of 3.**
+- **0 of 63 were the banned generic forms.** Not one "tell me more" or "how
+  did that make you feel". The prohibition in the prompt is working.
+
+The good ones are very good. From `sport_chunk-75`: *"شو قصدك بـ مدرب في
+الدرج؟"* — it picked up an idiom and asked what he meant by it. From
+`health_chunk-01`: *"ذكرت المشاهدين والفقرة، شو كان اسم البرنامج؟"* — it
+noticed the speaker was addressing an audience and asked which programme.
+Those are questions a curious grandchild would ask.
+
+**So: it went well, and the honest answer is that the prompt does not need
+revising for genericity.** The failure mode is something else.
+
+**Where the 15 failures come from.** Almost none of them are generic. They
+are grounded in a transcript that was itself wrong or empty:
+
+- **Confidently wrong (3 questions, clip 10).** Whisper hallucinated
+  "subscribe to the channel"; Gemini asked which grandchild taught her to
+  subscribe. Fluent, specific, and about something that never happened.
+- **Invention from an empty transcript (clips 8 and 18).** When the transcript
+  carries almost no content, the model supplies plausible cultural detail —
+  bamboo sticks in the Ayyala, a drummer who led it — that the speaker never
+  mentioned.
+- **Grounded in an ASR error (clips 2, 13, 14, 21).** "مش ملحقين" (we can't
+  keep up) became a game called الملاحقين; "يا اخوي خليفه" became a person
+  named أخو الخليفة.
+
+**Proposed prompt revision** — aimed at the real fault, not at genericity:
+instruct the model to return an empty `questions` array when the transcript is
+too short or too incoherent to ground a question in, rather than inventing
+one. The app already knows what to do with no AI question: it falls back to
+the offline bank, which is the same path as having no signal. A refusal is
+cheap; a confident question about a channel subscription is not.
+
+One caveat on the whole exercise: this dataset is broadcast media — presenters,
+doctors, match commentary — not grandparents. The model repeatedly assumes the
+speaker participated in what they were describing. That is a dataset artefact
+and we should not read it as a prompt flaw.
+
+### 2. Transcription failure diagnosis
+
+**Output:** Both 86% and 90% clips returned the identical string "اشتركوا في
+القناة". Duration was ruled out (the 90% clip is the longest in the dataset;
+an equal-length clip scored 20%), as was the language hint (byte-identical
+output with and without it). Re-running on `whisper-large-v3-turbo` took
+`cars_chunk-03` from 86% to **1%** and the control clip from 20% to 17%.
+Written up in `docs/asr-failure-modes.md` with the decision to switch models
+in Slice 3.
+
+### 3. Slice 2 — the core loop
+
+**Output — files AI wrote:** `lib/services/audio_service.dart`,
+`lib/data/bank_question_repository.dart`, `SessionRepository.end`, a real
+`lib/screens/interview_screen.dart`, wiring in `main.dart` and
+`people_screen.dart`, the iOS microphone key and deployment target bump, and
+`test/segment_lifecycle_test.dart`. Plus `docs/walkthrough-slice2.md`,
+`docs/qa-slice2.md`, `docs/slice2-unverified.md` and `docs/asr-failure-modes.md`.
+
+**A real bug the tests caught before it shipped.** `BankQuestionRepository`
+ordered the bank by `id`. Ids sort alphabetically, so `chg_01` — the "change"
+topic, the heaviest questions in the bank — came before `child_01`, and every
+session would have opened there instead of on childhood. It now orders by
+`rowid`, the order the questions appear in the file. The first version had a
+doc comment confidently claiming the opposite of what the code did.
+
+**Verification:** `flutter analyze` clean, `flutter test` 38 passing (18 from
+Slice 1, 20 new), `flutter build apk --debug` succeeds. **Nothing has run on a
+device.** `docs/slice2-unverified.md` lists every unexecuted path — the
+microphone, permissions, the file write, playback, and the iOS build — rather
+than letting "it builds" stand in for "it works".
+
+**Also flagged:** `spike/results.md` contains the Gemini API key in plaintext
+inside 429 error URLs. The spike directory is outside the repo so nothing has
+leaked, but the key should be rotated.
