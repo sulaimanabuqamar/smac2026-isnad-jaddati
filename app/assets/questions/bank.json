@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "note": "Offline fallback. Used when there is no connection, or when the model returns nothing usable. Ships inside the APK. Target 48 questions; 30 seeded.",
+  "topics": ["childhood", "home", "work", "family", "traditions", "change"],
+  "questions": [
+    { "id": "child_01", "topic": "childhood", "ar": "وين كنتِ ساكنة لما كنتِ صغيرة؟", "en": "Where were you living when you were small?" },
+    { "id": "child_02", "topic": "childhood", "ar": "شو أول شي تتذكرينه في حياتك؟", "en": "What is the first thing you remember?" },
+    { "id": "child_03", "topic": "childhood", "ar": "مع مين كنتِ تلعبين؟", "en": "Who did you play with?" },
+    { "id": "child_04", "topic": "childhood", "ar": "شو كان أكثر شي تخافين منه وأنتِ صغيرة؟", "en": "What frightened you most as a child?" },
+    { "id": "child_05", "topic": "childhood", "ar": "شو كانت أمك تقول لك دايماً؟", "en": "What did your mother always say to you?" },
+
+    { "id": "home_01", "topic": "home", "ar": "كيف كان شكل البيت اللي تربيتِ فيه؟", "en": "What did the house you grew up in look like?" },
+    { "id": "home_02", "topic": "home", "ar": "مين كان ساكن معكم في البيت؟", "en": "Who else was living with you in that house?" },
+    { "id": "home_03", "topic": "home", "ar": "وين كنتم تجلسون في الصيف؟", "en": "Where did everyone sit in the summer?" },
+    { "id": "home_04", "topic": "home", "ar": "شو كان أقرب مكان لكم — السوق، ولا البحر؟", "en": "What was closest to you — the market, or the sea?" },
+    { "id": "home_05", "topic": "home", "ar": "متى انتقلتوا من هناك، وليش؟", "en": "When did you move away from there, and why?" },
+
+    { "id": "work_01", "topic": "work", "ar": "شو كان يشتغل أبوك؟", "en": "What work did your father do?" },
+    { "id": "work_02", "topic": "work", "ar": "أول مرة اشتغلتِ فيها، شو كنتِ تسوين؟", "en": "The first time you worked, what did you do?" },
+    { "id": "work_03", "topic": "work", "ar": "شو كان أصعب شي في الشغل وقتها؟", "en": "What was the hardest part of the work back then?" },
+    { "id": "work_04", "topic": "work", "ar": "كيف كان الناس يتساعدون بينهم؟", "en": "How did people help one another?" },
+    { "id": "work_05", "topic": "work", "ar": "شو تعلمتِ من الشغل وما تعلمتيه في مكان ثاني؟", "en": "What did that work teach you that nothing else did?" },
+
+    { "id": "fam_01", "topic": "family", "ar": "كيف تعرفتِ على جدي؟", "en": "How did you meet my grandfather?" },
+    { "id": "fam_02", "topic": "family", "ar": "كيف كان يوم عرسكم؟", "en": "What was your wedding day like?" },
+    { "id": "fam_03", "topic": "family", "ar": "شو كان أول بيت سكنتوا فيه سوا؟", "en": "What was the first home you lived in together?" },
+    { "id": "fam_04", "topic": "family", "ar": "شو أكثر شي تتذكرينه عن أولادك وهم صغار؟", "en": "What do you remember most about your children when they were small?" },
+    { "id": "fam_05", "topic": "family", "ar": "مين من العائلة تشتاقين له أكثر شي؟", "en": "Who in the family do you miss the most?" },
+
+    { "id": "trad_01", "topic": "traditions", "ar": "شو كنتم تطبخون في رمضان؟", "en": "What did you cook in Ramadan?" },
+    { "id": "trad_02", "topic": "traditions", "ar": "كيف كان العيد أيامكم؟", "en": "What was Eid like in your day?" },
+    { "id": "trad_03", "topic": "traditions", "ar": "مين كانت أحسن وحدة تطبخ في العائلة؟", "en": "Who was the best cook in the family?" },
+    { "id": "trad_04", "topic": "traditions", "ar": "شو الأكلة اللي ما أحد يطبخها مثلك؟", "en": "What dish does nobody make the way you do?" },
+    { "id": "trad_05", "topic": "traditions", "ar": "علّميني شي كانت أمك تسويه وما أحد يسويه اليوم.", "en": "Teach me something your mother did that nobody does today." },
+
+    { "id": "chg_01", "topic": "change", "ar": "شو أكثر شي تغيّر من أيامكم؟", "en": "What has changed the most since your day?" },
+    { "id": "chg_02", "topic": "change", "ar": "شو الشي اللي تتمنين يرجع؟", "en": "What is the one thing you wish would come back?" },
+    { "id": "chg_03", "topic": "change", "ar": "أول مرة شفتِ فيها سيارة أو تلفزيون، كيف كان؟", "en": "The first time you saw a car, or a television — what was that like?" },
+    { "id": "chg_04", "topic": "change", "ar": "شو تقولين للناس الصغار اليوم؟", "en": "What would you say to young people today?" },
+    { "id": "chg_05", "topic": "change", "ar": "شو تبين أحفادك يتذكرونه عنك؟", "en": "What do you want your grandchildren to remember about you?" }
+  ]
+}

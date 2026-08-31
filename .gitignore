@@ -1,0 +1,32 @@
+# ---- Secrets. Never commit. ----
+.env
+app/.env
+*.env
+!.env.example
+app/android/key.properties
+*.jks
+*.keystore
+
+# ---- Flutter / Dart ----
+app/.dart_tool/
+app/.packages
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+**/generated_plugin_registrant.dart
+
+# ---- Android ----
+app/android/.gradle/
+app/android/local.properties
+app/android/app/debug/
+app/android/app/profile/
+app/android/app/release/
+
+# ---- iOS ----
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/Generated.xcconfig
+
+# ---- macOS ----
+.DS_Store
