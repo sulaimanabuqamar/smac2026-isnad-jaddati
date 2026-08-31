@@ -154,3 +154,74 @@ The APK then built — `app-debug.apk`, 194 MB, debug with all ABIs. The
 dependency table in `docs/spec.md` and the count in CLAUDE.md were updated
 from nine to eight. This is the first dependency we have removed, and the
 reason is recorded in spec section 10 so it can be answered in the Q&A.
+
+## 2026-08-31 — Sulaiman — Claude Code (CLI) — Slice 1
+
+**Organizer approval.** Dr. Hadi Otrok confirmed on 31 August 2026 that AI
+may be used to write application code for this entry. Rule 1 in CLAUDE.md —
+"do not write whole features or whole screens" — was lifted on that basis
+before any of the code below was written. The amendment in CLAUDE.md still
+carries a TODO to paste the exact wording of the email, because what is
+recorded there is a summary written from a verbal description of it, not a
+quotation. That must be replaced before submission.
+
+**Prompt:** Build Slice 1 in full: models for Person, Session, Segment and
+Mention as plain Dart classes; `lib/data/db.dart` with sqflite and
+hand-written SQL matching `docs/spec.md` section 8 exactly, seeding
+`bank_question` from `assets/questions/bank.json` on first open;
+`PersonRepository` with full CRUD and `SessionRepository` /
+`SegmentRepository` with create and read only; a `PeopleScreen` home with
+session and story counts and an empty state, an `AddPersonScreen`, and marked
+placeholders for Interview, Archive and Settings; `main.dart` with routes,
+theme and bilingual support set up from the start; unit tests for
+`PersonRepository` against an in-memory database. Verify with `flutter
+analyze`, `flutter test` and `flutter build apk --debug`. Then write
+`docs/walkthrough-slice1.md` and `docs/qa-slice1.md`, and commit in logical
+steps.
+
+**Output — files it wrote.** All of the following are AI-written first
+drafts:
+
+- `lib/models/` — `person.dart`, `session.dart`, `segment.dart`,
+  `mention.dart`, `bank_question.dart`
+- `lib/data/` — `db.dart`, `person_repository.dart`,
+  `session_repository.dart`, `segment_repository.dart`
+- `lib/screens/` — `people_screen.dart`, `add_person_screen.dart`,
+  `interview_screen.dart`, `archive_screen.dart`, `settings_screen.dart`
+- `lib/widgets/` — `bilingual.dart`, `not_built_yet.dart`
+- `lib/theme.dart`, `lib/main.dart`
+- `test/person_repository_test.dart`, `test/bank_seed_test.dart`
+- `docs/walkthrough-slice1.md`, `docs/qa-slice1.md`
+- The CLAUDE.md amendment and this entry
+
+It deleted the stock `test/widget_test.dart`, which still tested the counter
+template from `flutter create`.
+
+**Decisions it made and flagged rather than making silently:**
+
+- Declined to invent a quotation from Dr. Otrok's email, since it had not
+  been given the text. It recorded the approval as a summary and marked it
+  with a TODO instead. A fabricated quotation attributed to a named person in
+  a file judges read would have been worse than no quotation.
+- Avoided adding `package:path` for a single path join, because that would
+  have taken the third-party dependency count from eight to nine against
+  CLAUDE.md rule 3. Used string interpolation and wrote down why.
+- Added two packages and justified both: `flutter_localizations`, which ships
+  with the Flutter SDK and is not third-party, and `sqflite_common_ffi` as a
+  dev dependency only, which lets sqflite run on the desktop VM so the
+  repository SQL can be tested without a phone. Neither changes the shipped
+  count of eight.
+- Defined "story" as a finished session — one with `ended_at` set — since the
+  brief asked for a story count without saying what a story was. Wrote a test
+  pinning that definition and recorded it in the walkthrough.
+
+**Verification, run and reported honestly:** `flutter analyze` clean;
+`flutter test` 18 tests passing; `flutter build apk --debug` succeeds. iOS
+signing is not set up, so nothing has been run on a device. The walkthrough
+states plainly that the slice has never run on real hardware.
+
+**What we did with it:** Read every file. The reasoning behind each decision
+is in `docs/walkthrough-slice1.md`, written for exactly this purpose — so
+that the Q&A is a conversation about decisions rather than a defence of code
+we cannot account for. `docs/qa-slice1.md` includes the question of who wrote
+the code, and the answer we give is the true one.
