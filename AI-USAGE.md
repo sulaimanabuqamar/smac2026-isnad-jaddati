@@ -113,3 +113,30 @@ leaving it out.
 `flutter create` generates and has not been edited — every screen, model and
 service in this app is written by us, starting tomorrow. No iOS build has been
 attempted yet; Xcode was still downloading.
+
+## 2026-08-31 — Sulaiman — Claude Code (CLI)
+
+**Prompt:** Asked it to run `flutter build apk --debug` to prove the scaffold
+compiles while Xcode downloaded, record the dual-target position in
+`docs/spec.md` §10 as a deliberate choice, and push to the remote.
+
+**Output:** The build failed after 3m22s, and the failure is worth recording
+because it is not the one we expected. Gradle ran on JDK 25 without objecting,
+so the JDK-21 question is settled empirically rather than by assumption. It
+died instead on `permission_handler_android` 14.0.0, which declares
+`compileSdk = 37`; the Android Gradle Plugin resolves that to the SDK target
+`android-37`, and Google's SDK repository now publishes `android-37.0`, `37.1`
+and `37.2` with no plain `android-37`. AGP 9.1.0 and Gradle 9.3.1 are both
+current, so this is an upstream naming mismatch and not our configuration.
+
+It also found that the repository had no git remote configured despite the
+GitHub repo existing, and that the local branch was `master` while GitHub's
+default is `main`.
+
+**What we did with it:** Did not accept a workaround. Two were offered and
+declined for now — a `subprojects` block overriding `compileSdk`, which fails
+our rule that any line must be explainable in thirty seconds, and pinning
+`permission_handler_android` back to 13.0.1. The spec was corrected the same
+hour to say the APK does not currently build, rather than leaving the earlier
+sentence claiming it compiled. iOS is unaffected: `permission_handler_apple`
+is a separate package and does not use `compileSdk`.

@@ -149,10 +149,32 @@ on free provisioning, not a defect we introduced.
 | Mitigation | Rebuild and reinstall from Xcode on **15 September**, the night before Demo Day |
 | Fallback | Laptop and cable travel with us; a reinstall takes about two minutes |
 
-*Honest caveat.* Free provisioning means the app is installed by cable from
-Xcode rather than downloaded. If a judge reads slide 10 as requiring a file
-anyone can download and install unaided, the Android APK answers that and we
-can produce one from the same codebase on request.
+*Both targets, deliberately.* iOS is the development and demo target because
+it is the device we own: we install, test and re-test on real hardware every
+day, and over eight days that is worth more than any platform argument.
+Android is generated and built so that slide 10's "downloadable in your phone
+as an application" has a literal answer — `flutter build apk --release`
+produces one file anyone can install unaided, no cable and no Xcode. Neither
+target is a hedge against the other. One is the phone we develop against; the
+other is the artefact we can hand over.
+
+*What that costs us to say honestly.* Free provisioning installs by cable from
+Xcode rather than by download, so the iOS build alone would be a weak answer
+to slide 10; the APK is what makes the answer literal. Two caveats attach to
+that, and we state both rather than implying more.
+
+First, **the APK does not currently build.** `permission_handler_android`
+14.0.0 declares `compileSdk = 37`, which AGP resolves to the SDK hash string
+`android-37`; Google's SDK repository publishes `android-37.0`, `37.1` and
+`37.2` but no plain `android-37`, so the target cannot be found. This is an
+upstream mismatch between the plugin and the SDK naming scheme, not our build
+configuration — AGP 9.1.0 and Gradle 9.3.1 are both current. iOS is unaffected:
+`permission_handler_apple` is a separate package and does not use compileSdk.
+
+Second, once it builds, it will still not have been run on real Android
+hardware. Sulaiman will borrow an Android phone once before **8 September**
+and test it. Until then the APK is at best a compile-verified deliverable,
+not a demonstrated one.
 
 *Defensible in Q&A.* One language, one codebase, an explicit widget tree. Nine
 dependencies, each explainable in a sentence by a named owner. Flutter is also
