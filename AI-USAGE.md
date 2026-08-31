@@ -66,3 +66,50 @@ and the seed question bank. No application code.
 
 **What we did with it:** Kept as the starting repo. All Dart code from here is
 written by the team.
+
+## 2026-08-31 — Sulaiman — Claude Code (CLI)
+
+**Prompt:** Toolchain setup. Asked it to check free disk space before
+installing anything, then install the Flutter SDK, the Android SDK and
+platform-tools, accept the Android licences and show `flutter doctor` — with
+an explicit instruction to stop at each step so the result could be checked,
+and to write no application code.
+
+**Output:** Flutter 3.47.2 and Android Studio installed via Homebrew. Two
+things it pushed back on rather than doing as asked. First, it checked the JDK
+version instead of assuming: the prompt said to point Flutter at Android
+Studio's bundled JDK 21, but the bundled JBR is 25, so the step had nothing to
+point at and was dropped. Second, `brew install --cask temurin@21` failed
+because the cask needs a sudo password it cannot supply; it reported the
+failure rather than routing around it. Android SDK was then installed headless
+with `sdkmanager` — platform-tools 37.0.1, `platforms;android-36`,
+`build-tools;36.1.0`, API 36 read from Flutter's own `gradle_utils.dart`
+rather than guessed.
+
+**What we did with it:** Accepted the JDK correction and stayed on 25.
+`flutter doctor` green on the Android toolchain; Xcode left red deliberately
+at that point.
+
+**Prompt:** Platform change to iOS, because the only phone on the team is an
+iPhone and free provisioning on a device we own beats sourcing an Android we
+do not have. Asked it to add the iOS runner with
+`flutter create --platforms ios .`, keep Android, update `docs/spec.md` §10
+and CLAUDE.md D3, and record the 7-day profile expiry as a known risk.
+
+**Output:** It stopped on the premise: there was no existing scaffold to add a
+runner to, because the earlier `flutter create` had never been run. On an
+empty directory `--platforms ios` would have produced an iOS-only project with
+no `android/`, and would have defaulted the organisation to `com.example`. It
+ran the combined command instead —
+`flutter create --org com.isnad --project-name jaddati --platforms ios,android .`
+— then added the nine dependencies with `flutter pub add`, registered
+`assets/questions/bank.json` in `pubspec.yaml`, and rewrote spec §10 and D3.
+It also flagged that free provisioning installs by cable rather than download,
+which is a weaker answer to slide 10's "downloadable in your phone as an
+application" than an APK is, and wrote that caveat into the spec rather than
+leaving it out.
+
+**What we did with it:** Kept the scaffold. `lib/main.dart` is exactly what
+`flutter create` generates and has not been edited — every screen, model and
+service in this app is written by us, starting tomorrow. No iOS build has been
+attempted yet; Xcode was still downloading.

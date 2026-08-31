@@ -69,8 +69,16 @@ voice; a transcript can be regenerated. Recording must never be able to fail.
 One question, one answer, one file. The segment ends, transcribes, and the
 follow-up appears while the grandparent is still sitting there.
 
-**D3 — Flutter, Android APK.** `flutter build apk --release` gives one
-sideloadable file: no dev server, no account, no network on Demo Day.
+**D3 — Flutter, iOS with free provisioning.** Android is still generated and
+still builds; iOS is the target we test and demo. The reason is availability:
+we own an iPhone and no Android handset, and a build we install on a device in
+our hands beats one we can only reason about. `flutter build apk --release`
+stays one command away if an Android phone appears.
+
+*Known risk — the profile expires after 7 days.* An app signed with a free
+personal Apple ID stops launching a week after it is installed. Mitigation:
+rebuild and reinstall from Xcode on **15 September**, the night before Demo
+Day, and carry the cable and the laptop to the venue.
 
 **D4 — sqflite with hand-written SQL,** not Drift. Generated code is a
 liability when a judge asks who wrote it. No state-management library either;
@@ -80,8 +88,8 @@ explained.
 ## The AI boundary
 | Operation | Where | Notes |
 |---|---|---|
-| Transcription (audio → Arabic text) | cloud | Whisper API |
-| Follow-up question generation | cloud | last 2 turns → 3 candidates, JSON |
+| Transcription (audio → Arabic text) | cloud | Whisper Large v3 via Groq (free tier) |
+| Follow-up question generation | cloud | Gemini (free tier). Last 2 turns → 3 candidates, JSON |
 | Story extraction (title/people/place/decade) | cloud | same call as above |
 | Translation Arabic ↔ English | **on device** | ML Kit, ~32 MB model, offline |
 | Audio capture and storage | **on device** | no AI, deliberately |
