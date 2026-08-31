@@ -34,8 +34,8 @@ code may be produced. They are not style preferences.
 2. **No line of code a team member cannot explain out loud in 30 seconds.**
    If the choice is between clever and explainable, choose explainable.
 3. **No new dependency** without stating in one sentence what it does and who
-   on the team owns that answer in the Q&A. Current list is nine. Justify any
-   tenth against that bar.
+   on the team owns that answer in the Q&A. Current list is eight. Justify any
+   ninth against that bar.
 4. **Append to AI-USAGE.md every session** — date, the actual prompt, what came
    back, what the member did with it. Written the day it happens, never
    reconstructed before the deadline.

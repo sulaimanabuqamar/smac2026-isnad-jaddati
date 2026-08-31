@@ -140,3 +140,17 @@ our rule that any line must be explainable in thirty seconds, and pinning
 hour to say the APK does not currently build, rather than leaving the earlier
 sentence claiming it compiled. iOS is unaffected: `permission_handler_apple`
 is a separate package and does not use `compileSdk`.
+
+**Follow-up, same session.** Three fixes were offered for the failed APK
+build: pin `permission_handler_android` to 13.0.1, override `compileSdk` in a
+`subprojects` block, or drop the package entirely because `record` already
+exposes `hasPermission()`. We chose to drop it, on the reasoning that the only
+job the spec gives `permission_handler` is the microphone permission and
+`record` does that on both platforms. Verified before deciding: nothing else
+in the tree imports it, and `record` 7.1.1 declares
+`Future<bool> hasPermission({bool request = true})`.
+
+The APK then built — `app-debug.apk`, 194 MB, debug with all ABIs. The
+dependency table in `docs/spec.md` and the count in CLAUDE.md were updated
+from nine to eight. This is the first dependency we have removed, and the
+reason is recorded in spec section 10 so it can be answered in the Q&A.

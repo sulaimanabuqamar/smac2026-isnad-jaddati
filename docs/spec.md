@@ -163,28 +163,27 @@ Xcode rather than by download, so the iOS build alone would be a weak answer
 to slide 10; the APK is what makes the answer literal. Two caveats attach to
 that, and we state both rather than implying more.
 
-First, **the APK does not currently build.** `permission_handler_android`
-14.0.0 declares `compileSdk = 37`, which AGP resolves to the SDK hash string
-`android-37`; Google's SDK repository publishes `android-37.0`, `37.1` and
-`37.2` but no plain `android-37`, so the target cannot be found. This is an
-upstream mismatch between the plugin and the SDK naming scheme, not our build
-configuration — AGP 9.1.0 and Gradle 9.3.1 are both current. iOS is unaffected:
-`permission_handler_apple` is a separate package and does not use compileSdk.
+First, the APK **compiles but has never been run on real Android hardware.**
+Sulaiman will borrow an Android phone once before **8 September** and test it. Until then it is a compile-verified deliverable, not a
+demonstrated one.
 
-Second, once it builds, it will still not have been run on real Android
-hardware. Sulaiman will borrow an Android phone once before **8 September**
-and test it. Until then the APK is at best a compile-verified deliverable,
-not a demonstrated one.
+Second, it got there by losing a dependency. `permission_handler` 14.0.0
+declares `compileSdk = 37`, which AGP resolves to the SDK target `android-37`;
+Google publishes `android-37.0`, `37.1` and `37.2` and no plain `android-37`,
+so the Android build could not resolve it. Rather than pin an old version or
+override `compileSdk`, we removed the package: `record` already requests the
+microphone permission through `hasPermission()`, which was the only job
+`permission_handler` had here. Eight dependencies instead of nine, and one
+less thing to defend.
 
-*Defensible in Q&A.* One language, one codebase, an explicit widget tree. Nine
+*Defensible in Q&A.* One language, one codebase, an explicit widget tree. Eight
 dependencies, each explainable in a sentence by a named owner. Flutter is also
 named on slide 36 as a cross-platform option the organizers teach.
 
 | Package | Does | Owner |
 |---|---|---|
-| `record` | Captures microphone audio to m4a | Adel |
+| `record` | Captures microphone audio to m4a, and requests the microphone permission via `hasPermission()` | Adel |
 | `just_audio` | Plays a segment back | Adel |
-| `permission_handler` | Microphone permission | Adel |
 | `sqflite` | Local database | Sulaiman |
 | `path_provider` | Finds the writable audio directory | Sulaiman |
 | `http` | Two API calls | Sulaiman |
