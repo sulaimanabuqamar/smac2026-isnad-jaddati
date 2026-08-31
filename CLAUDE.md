@@ -27,10 +27,33 @@ code may be produced. They are not style preferences.
 - "It is mobile Application not a web Application, so it must be downloadable
   in your phone as an application."
 
+### Amendment — 31 August 2026, organizer approval
+
+Dr. Hadi Otrok confirmed by email on 31 August 2026 that AI may be used to
+write application code for this entry. On that basis rule 1 below is lifted
+as of Slice 1. The orientation-deck rules above are unchanged and still bind:
+in particular, all AI usage must still be documented in the report, and the
+GitHub trail must still show the team's own development.
+
+> **TODO — Sulaiman:** paste the exact wording of Dr. Otrok's email in place
+> of this block, and record its date and sender. This paragraph is a summary
+> written from a verbal description of the email, not a quotation from it. It
+> must be replaced with the real text before submission, because the approval
+> is the sole basis for AI-written code in this repo and a judge is entitled
+> to see it.
+
+What did *not* change: rules 2 through 6, the reliability rule, the
+architecture decisions, and the requirement that every member can defend
+every line under questioning. AI writing the first draft raises the bar on
+rule 2 rather than lowering it — code none of us can explain is worth less
+now, not more.
+
 ### How to work in this repo
-1. **Do not write whole features or whole screens.** Explain the approach and
-   the design decisions, then walk the assigned member through writing it.
-   They type it. You review and correct.
+1. ~~**Do not write whole features or whole screens.**~~ *Lifted 31 Aug 2026,
+   see the amendment above.* AI may write application code. The obligation
+   that replaces it: **the member who owns the file reads every line and can
+   explain it**, and the walkthrough document for each slice records why the
+   code is shaped the way it is.
 2. **No line of code a team member cannot explain out loud in 30 seconds.**
    If the choice is between clever and explainable, choose explainable.
 3. **No new dependency** without stating in one sentence what it does and who
