@@ -31,6 +31,12 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Ships with the Flutter SDK; not a third-party package, so the dependency
+  # count in CLAUDE.md is unaffected. Provides the Arabic text handling that
+  # the bilingual screens rely on.
+  flutter_localizations:
+    sdk: flutter
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -53,6 +59,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  sqflite_common_ffi: ^2.4.2+1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
