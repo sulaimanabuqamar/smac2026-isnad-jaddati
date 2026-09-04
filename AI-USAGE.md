@@ -326,3 +326,70 @@ than letting "it builds" stand in for "it works".
 **Also flagged:** `spike/results.md` contains the Gemini API key in plaintext
 inside 429 error URLs. The spike directory is outside the repo so nothing has
 leaked, but the key should be rotated.
+
+---
+
+## 2026-09-04 — Sulaiman — Claude Code (CLI) — Slice 3
+
+**Prompt:** continued the existing session in the repo with no new
+instruction, i.e. "pick up where we left off". It read `CLAUDE.md`,
+`docs/spec.md`, the Slice 2 code and `docs/slice2-unverified.md`, established
+from the schedule in spec §12 that Slice 3 is transcription + queue, and
+built it.
+
+**Output — files AI wrote:** `lib/services/transcription_service.dart`,
+`lib/services/transcription_queue.dart`, `lib/services/api_keys.dart`, the
+four new methods on `SegmentRepository`, the queue wiring in `main.dart`,
+`people_screen.dart` and `interview_screen.dart`, the rewritten `_SegmentRow`
+plus the new `_TranscriptPending` and `_QueueBanner` widgets, and
+`test/transcription_test.dart` (28 tests). Plus `docs/walkthrough-slice3.md`,
+`docs/qa-slice3.md`, `docs/slice3-unverified.md`, and the edits to
+`README.md` and `docs/spec.md` §10–11.
+
+**What we did with it:**
+
+**A dependency went, and for a real reason.** The first plan was the obvious
+one: keep `flutter_dotenv` and declare `.env` in `pubspec.yaml` as an asset.
+Checking what Flutter does with a *missing* declared asset killed it — the
+build fails outright, so anyone cloning this repo without a `.env` could not
+have built the app at all. `flutter run --dart-define-from-file=.env` does the
+same job with the SDK we already have, and a missing key becomes an empty
+string, which is a state we already have to support. Seven dependencies now,
+down from nine on Sunday.
+
+**The API contract was verified against the live service, not the docs.** A
+5.9-second AAC m4a of spoken Arabic, posted to `api.groq.com` with exactly the
+fields our service sends: HTTP 200 and the correct Arabic back. That
+eliminated the most likely way this slice fails on a phone — a wrong model
+name or a rejected container. It also surfaced two details we would otherwise
+have found on stage: the response body has a leading space, and carries an
+extra `x_groq` key.
+
+**The key path was verified too.** `flutter test --dart-define-from-file=.env`
+against a throwaway assertion on `ApiKeys.groq`: passes with the flag, fails
+without it. The test was deleted rather than committed, because it would have
+failed for anyone without a key.
+
+**Two bugs the tests caught.** First, the fake answers in the queue tests were
+short Arabic phrases against 40-second segments — which tripped our own
+implausibility guard and failed every queue test. The guard is real code and
+the fixtures have to respect it; the fixture is now a realistic 120-character
+answer, with a comment saying why. Second, `run()` originally returned
+immediately when a run was already in flight, so a caller could not await
+completion and a test closed the database mid-upload. It now returns the
+in-flight run instead of starting a second one — which is also what stops the
+interview screen uploading the same segment twice, since it calls `run()` on
+open, on save and on retry.
+
+**One thing rejected.** The first draft of `saveTranscript` guarded the
+human-corrected case with `WHERE ... AND edited_by_user = 0`, which would have
+left an edited row stuck at `pending` forever and the queue spinning on a row
+it is forbidden to write. Rewritten as a single statement with the guard in a
+`CASE` on the text column only, so the status always advances. There is a test
+named after exactly that failure.
+
+**Verification:** `flutter analyze` clean, `flutter test` 66 passing (38 from
+Slices 1–2, 28 new), `flutter build apk --debug` succeeds, and the live Groq
+call above. **Still nothing has run on a phone** — `docs/slice3-unverified.md`
+lists what that leaves open, and every item in `docs/slice2-unverified.md` is
+still open too.

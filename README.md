@@ -44,7 +44,7 @@ question  →  record segment  →  save locally  →  transcribe  →  follow-u
 
 Recording and transcription are deliberately decoupled. Audio is written to
 local storage before anything touches the network, so a session works with no
-signal: questions fall back to a 48-question offline bank, recordings queue,
+signal: questions fall back to a 30-question offline bank, recordings queue,
 and translation runs on-device. Nothing about a bad connection can cost you
 her voice.
 
@@ -54,11 +54,19 @@ Requires Flutter (stable) and the Android SDK.
 
 ```bash
 cd app
-cp .env.example .env        # add your API key
+cp .env.example .env        # then paste your keys into it
 flutter pub get
-flutter run                 # debug on a connected device
-flutter build apk --release # installable APK
+flutter run   --dart-define-from-file=.env   # debug on a connected device
+flutter build apk --release --dart-define-from-file=.env
 ```
+
+`.env` is gitignored and holds the two cloud keys. The Flutter SDK reads it
+directly with `--dart-define-from-file`, so there is no `.env` asset and no
+dotenv package — see `app/lib/services/api_keys.dart`.
+
+**Without the flag the app still runs.** Recording, playback, the offline
+question bank and the archive all work with no keys at all; transcripts simply
+stay queued. That is the point of the design, not a degraded mode.
 
 The release APK is at `app/build/app/outputs/flutter-apk/app-release.apk`.
 
@@ -75,5 +83,11 @@ CLAUDE.md   working rules for this repo
 
 Per contest rules, all AI assistance is documented in
 [AI-USAGE.md](AI-USAGE.md) — the actual prompts, and what each contributed.
-The application was written by the team; AI was used for planning, review and
-specific explanations, all logged.
+
+The competition rules were amended on 31 August 2026: Dr. Hadi Otrok confirmed
+by email that AI may be used for all parts of the entry. From that date AI has
+written application code here, and every session that it did is logged in
+AI-USAGE.md with the prompt and what was done with the result. What has not
+changed is that the member who owns a file has read every line of it and can
+explain it — each slice has a walkthrough in `docs/` recording why the code is
+shaped the way it is.

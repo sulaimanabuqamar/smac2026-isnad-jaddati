@@ -176,7 +176,14 @@ microphone permission through `hasPermission()`, which was the only job
 `permission_handler` had here. Eight dependencies instead of nine, and one
 less thing to defend.
 
-*Defensible in Q&A.* One language, one codebase, an explicit widget tree. Eight
+In Slice 3 a second one went: `flutter_dotenv` read the key out of a bundled
+asset, and `flutter run --dart-define-from-file=.env` does the same job with
+the SDK we already have — while removing a way for the build to fail. A
+bundled `.env` has to be declared in `pubspec.yaml`, and a declared asset that
+is missing stops the build outright, so anyone cloning this repo without a
+`.env` could not have built it at all. Seven dependencies.
+
+*Defensible in Q&A.* One language, one codebase, an explicit widget tree. Seven
 dependencies, each explainable in a sentence by a named owner. Flutter is also
 named on slide 36 as a cross-platform option the organizers teach.
 
@@ -187,7 +194,6 @@ named on slide 36 as a cross-platform option the organizers teach.
 | `sqflite` | Local database | Sulaiman |
 | `path_provider` | Finds the writable audio directory | Sulaiman |
 | `http` | Two API calls | Sulaiman |
-| `flutter_dotenv` | Loads the key from an untracked file | Sulaiman |
 | `google_mlkit_translation` | On-device Arabic ↔ English | Bilal |
 | `intl` | Dates and durations in both languages | Bilal |
 
@@ -198,7 +204,13 @@ five screens, and it is enough to explain.
 
 - `app/.env` holds `GROQ_API_KEY` and `GEMINI_API_KEY`. It is gitignored from the first commit, before a key existed.
 - `app/.env.example` is committed with blank values.
-- Release builds pass the key with `--dart-define`.
+- Every build passes them with `--dart-define-from-file=.env`, debug included,
+  and `lib/services/api_keys.dart` reads them with `String.fromEnvironment`.
+  Nothing at runtime opens a file looking for a key.
+- **A build with no keys is a supported configuration, not a broken one.**
+  Recording, playback, the question bank and the archive all work; segments
+  stay in the transcription queue. This is tested, not assumed — see the
+  `noKey` case in `test/transcription_test.dart`.
 - Honest caveat: a key shipped inside any client app is extractable. The
   production answer is a thin proxy server holding the key. We scoped it out
   for eight days and we say so rather than pretending otherwise.
