@@ -36,6 +36,11 @@ relationship inference · cloud backup · audio editing. Each is a deliberate
 choice of depth over breadth, and each is an answer we give rather than a gap
 we hide.
 
+**Importing existing audio is no longer out of scope.** It moved in on
+5 September and is specified in section 6a. It is not audio editing and not
+cloud backup: it copies a file the user already has into the archive so it can
+be transcribed and browsed like anything else.
+
 ## 6. User flow
 
 ### High level
@@ -46,7 +51,8 @@ Choose person  →  Interview  →  Story card  →  Archive
 ### Low level
 
 **Choose person** — pick an existing person / OR add a person (name, relation,
-photo) / OR resume an unfinished session.
+photo) / OR resume an unfinished session / OR **import a recording you already
+have** (section 6a).
 
 **Interview** — app shows a question (AI follow-up, or offline bank, or typed
 by you) → hold to record → segment saved locally → transcribe now or queue →
@@ -58,6 +64,115 @@ share as text.
 
 **Archive** — browse by person / filter by decade or place / search transcripts
 / see the pending transcription queue.
+
+## 6a. Import old recordings
+
+**Status: specified, not built. Scheduled immediately after Slice 3
+transcription.**
+
+### Why
+
+The app as built only works when there is someone alive to sit down and
+answer. That excludes the people whose voices matter most — the ones already
+gone, whose voice notes are sitting in somebody's phone.
+
+Import lets those in. Pick an audio file, and it becomes a segment that
+transcribes, extracts and is browsed exactly like a recorded one. A voice note
+from 2019 and an answer recorded this afternoon end up as the same kind of
+row, in the same archive, searchable together.
+
+This is the difference between an app for recording your grandmother and an
+app for keeping your family's voices. It is a small amount of code for a large
+change in what the app is for.
+
+### The flow
+
+1. On the person screen: **"Add a recording you already have"**.
+2. A file picker, limited to audio.
+3. The chosen file is **copied** into `recordings/session_N/`, the same
+   structure a recorded segment uses. Copied rather than referenced: a file
+   the user later deletes from their phone, or that lives in a cloud
+   placeholder, is not something the archive can depend on.
+4. A `segment` row is created and joins the transcription queue.
+
+### The data
+
+| Column | Value | Why |
+|---|---|---|
+| `question_source` | `'import'` | A new value on the existing CHECK constraint, alongside `ai`, `bank`, `manual`. Requires a schema migration — see below |
+| `question_text` | **null** | There was no question. The schema should say so rather than invent one |
+| `audio_path` | relative, as always | The copy lands in `recordings/session_N/`, so the rule from schema version 2 applies identically and needs no special case |
+| `transcribe_status` | `'pending'` | It joins the same queue. No separate path |
+
+`question_text` is currently `NOT NULL`. Making it nullable and adding
+`'import'` to the `question_source` CHECK is a **schema version 3 migration**,
+and SQLite cannot alter a CHECK constraint in place — the `segment` table has
+to be rebuilt: create the new table, copy the rows, drop the old, rename. That
+is the real cost of this feature and it is worth stating up front, because it
+is the part that can lose data if it is done carelessly. Existing rows keep
+their question text; nothing about them changes.
+
+Every screen that renders `question_text` has to handle null. Today that is
+the segment row on the interview screen and, once built, the story card.
+
+### What import does *not* get
+
+**No generated follow-up question.** There is nobody to ask.
+
+And the UI must not imply otherwise: no greyed-out button, no "coming soon",
+no empty space where a question would be. A disabled control is a promise that
+something is possible later, and here it is not — the person is gone. An
+imported segment is a **record**, not a conversation, and the app should be
+honest about the difference rather than treating it as a lesser version of a
+live interview.
+
+Concretely: an imported segment shows its transcript and its audio, and no
+question line at all.
+
+### What it shares
+
+Everything else, deliberately:
+
+- The same transcription queue, the same retry and offline behaviour.
+- The same story extraction — title, people, place, decade.
+- The same story card and the same archive. No "imported" filter, no separate
+  tab, no second-class section. It is the same kind of memory.
+
+An imported segment is marked as such in the data because that is true and
+cheap to record, not so the interface can treat it differently.
+
+### The dependency
+
+One new package, and its job is one sentence: **`file_picker`, or equivalent —
+choosing an audio file from the phone.** Owner: Sulaiman.
+
+That takes the count from **six to seven**.
+
+> **Correction to the original brief for this feature**, which said eight to
+> nine. That was the count before two removals: `flutter_dotenv` went on
+> 3 September when `--dart-define-from-file` replaced it, and
+> `google_mlkit_translation` went on 4 September when its unsigned framework
+> blocked the device install. The list in section 10 is the authority, and it
+> currently holds six.
+
+### Open questions to settle before building
+
+- **Which package.** `file_picker` is the obvious choice and is heavy. It is
+  worth ten minutes checking whether a lighter one covers "one audio file,
+  both platforms" before committing, since rule 3 says we defend it in a
+  sentence and a smaller sentence is better.
+- **Long files.** A recorded segment is 30–90 seconds by design. An imported
+  voice note might be twenty minutes, which is past Groq's file size limit and
+  well past a sensible unit of story. Either the import is split into
+  segments, or long files are refused with a clear message. **Splitting is the
+  better answer and the more work**; refusing is honest and cheap. Decide
+  before building, not during.
+- **Which session.** An import needs a `session_id`. Simplest is one session
+  per import; grouping several files into one session is a nicer story card
+  and more UI. Start with the simple one.
+- **Duration.** `duration_ms` comes free from the recorder today. For an
+  imported file it has to be read off the file, which means decoding it —
+  `just_audio` can supply it without adding anything new.
 
 ## 7. Mobile constraints (orientation deck slides 29–33)
 
@@ -94,6 +209,13 @@ bank_question (id, topic, text_ar, text_en)        -- seeded from assets
 `segment` is the spine. Everything else hangs off it. `audio_path` is written
 and flushed before `transcribe_status` is ever set — that ordering is the
 reliability guarantee.
+
+Planned for **schema version 3**, with the import feature in section 6a:
+`question_source` gains `'import'` and `question_text` becomes nullable. Both
+live inside CHECK/NOT NULL constraints that SQLite cannot alter in place, so
+that migration rebuilds the `segment` table — create, copy, drop, rename. It
+is the most dangerous migration in the project and the one to write tests for
+first.
 
 **`audio_path` is relative to the app documents directory**, never absolute,
 and is resolved with `AudioFiles.resolve` at the moment the file is needed.
@@ -204,6 +326,10 @@ named on slide 36 as a cross-platform option the organizers teach.
 | `http` | Two API calls | Sulaiman |
 | `intl` | Dates and durations in both languages | Bilal |
 
+A seventh is planned but not yet added: `file_picker` or equivalent, for the
+import feature in section 6a. Its job is one sentence — choosing an audio file
+from the phone. Owner: Sulaiman.
+
 `record` is pinned to **5.2.1**, downgraded from 7.1.1 on 5 September. On iOS
 18.5, 7.1.1 reported a successful recording and wrote a 28-byte container with
 no audio frames, every time — a package reporting a success it had not
@@ -266,7 +392,7 @@ five screens, and it is enough to explain.
 | Wed 3 Sep | Transcription + queue | Yes |
 | Thu 4 Sep | Follow-up generation | Yes |
 | Fri 5 Sep | Translation + story card + extraction | Yes |
-| Sat 6 Sep | Offline states, error states, polish, seeded demo data | Yes |
+| Sat 6 Sep | **Import old recordings (section 6a)** · offline and error states · polish · seeded demo data | Yes |
 | Sun 7 Sep | Video · 2-page document · AI usage report | Yes |
 | Mon 8 Sep | Submit with a day of margin | Yes |
 

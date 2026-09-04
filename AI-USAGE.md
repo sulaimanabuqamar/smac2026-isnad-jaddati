@@ -641,3 +641,61 @@ real later.
 
 **No byte counts are known to this session.** It cannot run the app on the
 phone. The byte-count print in `stop()` is untouched, as asked.
+
+---
+
+## 2026-09-05 — Sulaiman — Claude Code (CLI) — import spec, and the placeholders
+
+**Prompt:** "1. The Archive and Settings placeholder screens both say 'Later
+in the week · Bilal'. Bilal left the team — I'm solo. Remove the name from
+both. [...] 2. New feature, to build immediately AFTER Slice 3 transcription —
+spec it into docs/spec.md now, don't build it yet: IMPORT OLD RECORDINGS.
+[...] Note in the spec that this needs one new dependency (file_picker or
+equivalent), taking the count from eight to nine."
+
+**What we did with it:**
+
+**Placeholders.** The `owner` field is gone from `NotBuiltYet` entirely rather
+than blanked at the two call sites — an unused required parameter is a place
+for the name to come back. Both screens now read "Coming later this week".
+
+**One correction to the brief.** The dependency count is **six, going to
+seven**, not eight to nine. Eight was the count before two removals this week:
+`flutter_dotenv` on 3 September when `--dart-define-from-file` replaced it,
+and `google_mlkit_translation` on 4 September when its unsigned framework
+blocked the device install. Written into the spec as a marked correction
+rather than silently, because the number is quoted in the Q&A and a judge can
+count `pubspec.yaml`.
+
+**The part of this feature that is not obvious, and is now written down.**
+`question_text` is `NOT NULL` and `question_source` is constrained by a CHECK.
+Storing an import honestly — null question, source `'import'` — needs both
+changed, and SQLite cannot alter either in place. That is a **schema version 3
+migration that rebuilds the `segment` table**: create, copy, drop, rename. It
+is the most dangerous migration in the project, against the table that holds
+every recording, and the spec says so up front rather than letting it be
+discovered on the Saturday.
+
+**Three open questions were added rather than answered**, because they are
+product decisions: which picker package, what happens to a twenty-minute voice
+note that exceeds Groq's file limit (split, which is better and more work, or
+refuse, which is honest and cheap), and whether one import means one session.
+
+**Nothing was built.** Spec only, as asked.
+
+---
+
+### Flagged, not changed: Bilal appears in four other places
+
+The prompt covered the two screens. These are the rest, and they are
+submission documents rather than code, so they are the author's call:
+
+- `CLAUDE.md` line 7 — the team line, and line 125, the ownership table.
+- `README.md` line 15 — the team table judges read first.
+- `docs/spec.md` §10 — `intl` is owned by Bilal in the dependency table.
+- `docs/spec.md` §10 — a note saying the on-device translation decision "is
+  Bilal's call". That decision now has no owner and needs one.
+
+Also newly unowned: on-device translation, the story card and the archive.
+Both the AI boundary table in §9 and CLAUDE.md still describe ML Kit
+translation as shipping, and the package was removed on 4 September.
