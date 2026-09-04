@@ -60,7 +60,10 @@ void main() {
         seq: seq,
         questionText: 'وين كنتِ ساكنة لما كنتِ صغيرة؟',
         questionSource: QuestionSource.bank,
-        audioPath: path ?? '/documents/recordings/session_1/seg_${seq}_1.m4a',
+        // Relative to the app documents directory, never absolute — see
+        // test/audio_path_test.dart for the reinstall bug that made that an
+        // invariant rather than a preference.
+        audioPath: path ?? 'recordings/session_1/seg_${seq}_1.m4a',
         durationMs: 42000,
         transcribeStatus: status ?? TranscribeStatus.pending,
         createdAt: DateTime(2026, 9, 1, 15, seq),
@@ -106,7 +109,7 @@ void main() {
       expect(s.sessionId, sessionId);
       expect(s.seq, 1);
       expect(s.questionSource, QuestionSource.bank);
-      expect(s.audioPath, '/documents/recordings/session_1/seg_1_1.m4a');
+      expect(s.audioPath, 'recordings/session_1/seg_1_1.m4a');
       expect(s.durationMs, 42000);
       expect(s.editedByUser, isFalse);
       expect(s.transcriptAr, isNull);

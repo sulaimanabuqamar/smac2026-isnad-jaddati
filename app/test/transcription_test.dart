@@ -11,6 +11,7 @@ import 'package:jaddati/data/session_repository.dart';
 import 'package:jaddati/models/person.dart';
 import 'package:jaddati/models/segment.dart';
 import 'package:jaddati/models/session.dart';
+import 'package:jaddati/services/audio_files.dart';
 import 'package:jaddati/services/transcription_queue.dart';
 import 'package:jaddati/services/transcription_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -278,7 +279,9 @@ void main() {
             seq: seq,
             questionText: 'وين كنتي ساكنة وانتي صغيرة؟',
             questionSource: QuestionSource.bank,
-            audioPath: '/tmp/seg_$seq.m4a',
+            // Relative, like every row the app writes. See
+            // test/audio_path_test.dart for why that is an invariant.
+            audioPath: 'recordings/session_1/seg_${seq}_1757.m4a',
             durationMs: 42000,
             createdAt: DateTime.now(),
           ),
@@ -329,7 +332,7 @@ void main() {
 
       final row = (await segments.getForSession(sessionId)).single;
       expect(row.transcribeStatus, TranscribeStatus.failed);
-      expect(row.audioPath, '/tmp/seg_1.m4a');
+      expect(row.audioPath, 'recordings/session_1/seg_1_1757.m4a');
       expect(await segments.getPending(), isEmpty);
     });
 
@@ -379,16 +382,23 @@ void main() {
       tmp.deleteSync(recursive: true);
     });
 
+    /// Writes a real file and a row pointing at it *relatively*, the way the
+    /// app does. `tmp` stands in for the app documents directory, which is
+    /// what the injected resolver joins against.
     Future<void> addSegment(int seq) async {
-      final file = File('${tmp.path}/seg_$seq.m4a')
-        ..writeAsBytesSync(List.filled(64, 7));
+      final relative =
+          AudioFiles.segmentPath(sessionId: sessionId, seq: seq, stamp: 1757);
+      final file = File('${tmp.path}/$relative');
+      await file.parent.create(recursive: true);
+      file.writeAsBytesSync(List.filled(64, 7));
+
       await segments.create(
         Segment(
           sessionId: sessionId,
           seq: seq,
           questionText: 'سؤال',
           questionSource: QuestionSource.bank,
-          audioPath: file.path,
+          audioPath: relative,
           durationMs: 40000,
           createdAt: DateTime.now(),
         ),
@@ -406,6 +416,9 @@ void main() {
           apiKey: key,
           client: MockClient((_) async => respond(++calls)),
         ),
+        // Stands in for getApplicationDocumentsDirectory, which needs a
+        // device. The queue only ever sees relative paths either way.
+        resolveAudio: (relative) async => File('${tmp.path}/$relative'),
       );
     }
 
@@ -506,8 +519,8 @@ void main() {
     test('a row whose file has been deleted fails without taking the run down',
         () async {
       await addSegment(1);
-      File((await segments.getForSession(sessionId)).single.audioPath)
-          .deleteSync();
+      final stored = (await segments.getForSession(sessionId)).single.audioPath;
+      File('${tmp.path}/$stored').deleteSync();
 
       final queue = queueThat((_) => http.Response('{}', 200));
       await queue.run();
