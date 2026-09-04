@@ -14,7 +14,6 @@ class NotBuiltYet extends StatelessWidget {
     required this.title,
     required this.willDo,
     required this.scheduledFor,
-    required this.owner,
   });
 
   final String title;
@@ -22,11 +21,12 @@ class NotBuiltYet extends StatelessWidget {
   /// One sentence on what this screen will do once it is built.
   final String willDo;
 
-  /// The day from the schedule in docs/spec.md section 12.
+  /// When it is scheduled, from docs/spec.md section 12.
+  ///
+  /// No owner is named. These screens are read by judges, and a name on an
+  /// unbuilt screen tells them nothing they need and dates badly the moment
+  /// the team changes.
   final String scheduledFor;
-
-  /// Who on the team owns it, from the ownership table in CLAUDE.md.
-  final String owner;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +53,7 @@ class NotBuiltYet extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                '$scheduledFor · $owner',
+                scheduledFor,
                 style: JaddatiTheme.english.copyWith(fontSize: 15),
               ),
             ],

@@ -15,8 +15,7 @@ class ArchiveScreen extends StatelessWidget {
       title: 'Archive',
       willDo: 'Every story, browsable by person, place and decade, with a '
           'search across the transcripts.',
-      scheduledFor: 'Later in the week',
-      owner: 'Bilal',
+      scheduledFor: 'Coming later this week',
     );
   }
 }

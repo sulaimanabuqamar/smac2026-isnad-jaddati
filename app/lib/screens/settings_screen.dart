@@ -5,10 +5,10 @@ import '../theme.dart';
 
 /// Settings, plus — temporarily — the microphone diagnostics.
 ///
-/// The settings this screen will eventually hold are Bilal's and are not
-/// built. What is here now is a button that runs the encoder probe, parked on
-/// this screen because it is the one place in the app that is not part of the
-/// interview and cannot get in a grandmother's way.
+/// The settings this screen will eventually hold are not built. What is here
+/// now is a button that runs the encoder probe, parked on this screen because
+/// it is the one place in the app that is not part of the interview and
+/// cannot get in a grandmother's way.
 ///
 /// **The probe comes out once the recording config is settled.** It is here
 /// to answer one question in one device run rather than six rebuilds.
@@ -63,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             'Settings are not built yet. They will hold the offline '
             'translation model download and show which API keys are '
-            'configured. Owner: Bilal.',
+            'configured. Coming later this week.',
             style: JaddatiTheme.english.copyWith(height: 1.5),
           ),
           const Divider(height: 40),
