@@ -56,4 +56,57 @@ class SegmentRepository {
     );
     return rows.map(Segment.fromMap).toList();
   }
+
+  /// Writes a finished transcript and moves the row out of the queue.
+  ///
+  /// Two rules in one statement. The CASE is the human-correction guard: if
+  /// someone has fixed this transcript by hand, a later transcription must
+  /// not silently undo their work. The status is set outside the CASE and so
+  /// always advances — an edited row still leaves `pending`, because if it
+  /// did not, [getPending] would hand it back on every run forever.
+  ///
+  /// Written as raw SQL rather than two updates so it is one atomic
+  /// statement. There is no instant at which the text is new and the status
+  /// is old.
+  Future<int> saveTranscript(int id, String transcriptAr) => _db.rawUpdate(
+        '''
+        UPDATE segment
+           SET transcript_ar = CASE WHEN edited_by_user = 0
+                                    THEN ? ELSE transcript_ar END,
+               transcribe_status = ?
+         WHERE id = ?
+        ''',
+        [transcriptAr, TranscribeStatus.done.db, id],
+      );
+
+  /// Marks a segment as one transcription will not fix.
+  ///
+  /// Note what this does not touch: `audio_path` and the file it names. A
+  /// failed transcription costs a transcript, never a recording.
+  Future<int> markFailed(int id) => _db.update(
+        'segment',
+        {'transcribe_status': TranscribeStatus.failed.db},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+  /// Puts a failed segment back in the queue. Only ever called because a
+  /// person pressed retry — see TranscriptionQueue.retry for why.
+  Future<int> markPending(int id) => _db.update(
+        'segment',
+        {'transcribe_status': TranscribeStatus.pending.db},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+  /// How many segments are in a given state, across every session. Counted
+  /// in SQL rather than by fetching rows and calling `.length`, because the
+  /// archive shows this number and has no use for the rows behind it.
+  Future<int> countByStatus(TranscribeStatus status) async {
+    final rows = await _db.rawQuery(
+      'SELECT COUNT(*) AS n FROM segment WHERE transcribe_status = ?',
+      [status.db],
+    );
+    return rows.first['n'] as int;
+  }
 }
