@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 
@@ -187,49 +186,102 @@ class AudioService {
     return null;
   }
 
-  /// **Temporary diagnostics.** Prints the iOS audio session state around
-  /// [start].
+  /// **Temporary diagnostics.** Prints the permission state around [start].
   ///
-  /// Added 4 September 2026. Every file the device recorded was exactly 28
-  /// bytes — an m4a container with a header and no frames, which is what iOS
-  /// leaves behind when it hands the encoder silence. The hypothesis is that
-  /// `just_audio` has configured `AVAudioSession` for playback and the
-  /// category is not `playAndRecord` when `record` starts.
-  ///
-  /// This confirms or kills that hypothesis before anything is changed. It
-  /// is logged before *and* after `_recorder.start()`, because whether
-  /// `record` sets the category itself is exactly the thing in question.
-  ///
-  /// `AVAudioSessionRecordPermission` is asked separately from
-  /// `record.hasPermission()`: they are different questions, and a plugin
-  /// reporting granted while the OS reports otherwise would be a completely
-  /// different bug from the one we think we have.
-  ///
-  /// Remove once the cause is known.
+  /// This used to read the `AVAudioSession` category too, to test whether
+  /// `just_audio` had left the session in `playback` when recording started.
+  /// **That hypothesis is dead.** The device log showed `record` setting the
+  /// category itself — `soloAmbient` before the first start, `playAndRecord`
+  /// after it and on every attempt since — with the permission granted, and
+  /// the files still 28 bytes. The session is not the problem, so the
+  /// package that read it has been removed and only the permission line is
+  /// kept.
   Future<void> _logSessionState(String when, {required bool granted}) async {
     debugPrint('=== AUDIO SESSION ($when) ==============================');
     debugPrint('record.hasPermission : $granted');
+    debugPrint('platform             : ${Platform.operatingSystemVersion}');
+    debugPrint('=======================================================');
+  }
 
-    if (!Platform.isIOS) {
-      debugPrint('platform             : not iOS — AVAudioSession n/a');
-      debugPrint('=======================================================');
+  /// **Temporary diagnostics.** Records a short clip with each candidate
+  /// encoder config and reports how many bytes each one produced.
+  ///
+  /// Added 5 September 2026. Every recording is 28 bytes — an m4a container
+  /// with no frames. The audio session was cleared as the cause: `record`
+  /// sets `playAndRecord` itself, confirmed on the device. The current
+  /// suspicion is that iOS's AAC encoder refuses 16 kHz and writes a header
+  /// with nothing behind it rather than raising.
+  ///
+  /// This exists so that hypothesis costs **one** device run instead of one
+  /// per config. The list below is a 2×2 over sample rate and channel count,
+  /// plus two discriminators:
+  ///
+  /// - If everything except 16 kHz works, the sample rate is the problem.
+  /// - If `wav` at 16 kHz works while `aacLc` at 16 kHz does not, the problem
+  ///   is specifically the AAC encoder and not the input rate.
+  /// - If **every** row is 28 bytes then the encoder is not the cause at all,
+  ///   and the next place to look is `record` 7.1.1 on this iOS version.
+  ///   That is a real outcome and it should be reported as one, not answered
+  ///   with a third guess.
+  ///
+  /// Remove once the config is settled.
+  Future<void> probeEncoderConfigs() async {
+    if (isRecording) {
+      debugPrint('probe skipped: a real recording is in progress');
       return;
     }
 
-    try {
-      final session = AVAudioSession();
-      final category = await session.category;
-      debugPrint('AVAudioSession cat   : $category');
-      debugPrint('  is playAndRecord?  : '
-          '${category == AVAudioSessionCategory.playAndRecord}');
-      debugPrint('AVAudioSession mode  : ${await session.mode}');
-      debugPrint('category options     : ${await session.categoryOptions}');
-      debugPrint('record permission    : ${await session.recordPermission}');
-      debugPrint('other audio playing  : ${await session.isOtherAudioPlaying}');
-      debugPrint('current route        : ${await session.currentRoute}');
-    } catch (error) {
-      debugPrint('AVAudioSession       : could not be read — $error');
+    // Ordered so each row differs from the one above it in one variable.
+    const candidates = <(String, RecordConfig)>[
+      ('platform defaults  44100 / 2ch aac', RecordConfig()),
+      ('44100 / 1ch aac', RecordConfig(sampleRate: 44100, numChannels: 1)),
+      ('22050 / 1ch aac', RecordConfig(sampleRate: 22050, numChannels: 1)),
+      ('16000 / 2ch aac', RecordConfig(sampleRate: 16000, numChannels: 2)),
+      ('16000 / 1ch aac  <-- what we ship',
+          RecordConfig(sampleRate: 16000, numChannels: 1)),
+      ('16000 / 1ch wav', RecordConfig(
+          encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1)),
+    ];
+
+    debugPrint('=== ENCODER PROBE =====================================');
+    debugPrint('iOS                  : ${Platform.operatingSystemVersion}');
+    for (final encoder in [AudioEncoder.aacLc, AudioEncoder.wav]) {
+      debugPrint('supported ${encoder.name.padRight(6)}     : '
+          '${await _recorder.isEncoderSupported(encoder)}');
     }
+    debugPrint('a dead container is  : $observedEmptyContainerBytes bytes');
+    debugPrint('-------------------------------------------------------');
+
+    final dir = Directory(await AudioFiles.prepare('recordings/_probe/x'))
+        .parent;
+
+    for (final (label, config) in candidates) {
+      final path = '${dir.path}/probe_${label.hashCode}.'
+          '${config.encoder == AudioEncoder.wav ? 'wav' : 'm4a'}';
+      var result = '?';
+      try {
+        await _recorder.start(config, path: path);
+        // Long enough that a working encoder writes several frames, short
+        // enough that six of these is ten seconds of someone's time.
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
+        final returned = await _recorder.stop();
+
+        final file = File(returned ?? path);
+        if (!file.existsSync()) {
+          result = 'NO FILE';
+        } else {
+          final bytes = file.lengthSync();
+          result = '$bytes bytes'
+              '${bytes <= observedEmptyContainerBytes * 2 ? '   <-- DEAD' : ''}';
+          file.deleteSync();
+        }
+      } catch (error) {
+        result = 'threw ${error.runtimeType}: $error';
+      }
+      debugPrint('${label.padRight(36)} $result');
+    }
+
+    if (dir.existsSync()) dir.deleteSync(recursive: true);
     debugPrint('=======================================================');
   }
 
