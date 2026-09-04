@@ -199,7 +199,6 @@ named on slide 36 as a cross-platform option the organizers teach.
 |---|---|---|
 | `record` | Captures microphone audio to m4a, and requests the microphone permission via `hasPermission()` | Adel |
 | `just_audio` | Plays a segment back | Adel |
-| `audio_session` | Reads and sets the iOS `AVAudioSession` category, so recording and playback do not fight over it | Adel |
 | `sqflite` | Local database | Sulaiman |
 | `path_provider` | Finds the writable audio directory | Sulaiman |
 | `http` | Two API calls | Sulaiman |
@@ -211,10 +210,14 @@ translation is unresolved as a result, and section 9 below still describes it
 as shipping — **that inconsistency is open, and it is Bilal's call**, not
 something to quietly reword.
 
-`audio_session` was already in the tree as a transitive dependency of
-`just_audio`; it is declared directly from 4 September because we import it
-ourselves. It is the same package either way, but a package we call into
-should be one we have named and can defend.
+`audio_session` was declared directly on 4 September to read the iOS audio
+session category, and **removed again on 5 September**. It answered its
+question — `record` sets `playAndRecord` itself, so nothing needed to change
+— and its iOS side is only half-registered in this project: reading the
+category worked, `getRecordPermission` threw `MissingPluginException` on
+every run. A dependency that does nothing but fail is not defensible under
+rule 3, and there was nothing left for it to do. It remains in the tree
+transitively under `just_audio`, where it belongs.
 
 No state-management library. `setState` plus a repository class is enough for
 five screens, and it is enough to explain.

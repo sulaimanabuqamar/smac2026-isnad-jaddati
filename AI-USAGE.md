@@ -522,3 +522,66 @@ including the exact four-dead-rows case, both boundary sizes, idempotence,
 and the missing-file safety property. **The session diagnostics have not been
 read off a device** — that is the next thing, and no fix should be written
 before they are.
+
+---
+
+## 2026-09-05 — Sulaiman — Claude Code (CLI) — the encoder probe
+
+**Prompt:** "The diagnosis was wrong and the log proves it. record sets the
+category itself: soloAmbient before the first start, playAndRecord after, and
+playAndRecord on every attempt thereafter. Permission granted. Still 28 bytes.
+Do not write the audio_session fix — it would have been a no-op on a bug that
+isn't there. New hypothesis, to test not assume: RecordConfig is aacLc at
+sampleRate 16000. iOS's AAC encoder does not reliably accept 16 kHz [...] Test
+it cheaply before committing to anything [...] If defaults still give 28
+bytes, the encoder isn't the cause and we look at record 7.1.1 on iOS 18.5
+next. Say so rather than trying a third guess."
+
+Plus: "MissingPluginException on getRecordPermission every run. audio_session's
+iOS side isn't fully registered [...] Your call which — tell me, don't
+silently pick."
+
+**What we did with it:**
+
+**Two hypotheses in a row have now been wrong**, and both were killed by a
+device log rather than by argument. The first was that playback was still a
+path problem; the second was the audio session. Both sounded right. The
+instrumentation is what made each round cheap, and that is worth saying in
+the Q&A rather than presenting the eventual fix as though it were reasoned
+out in one pass.
+
+**One correction to the brief's step 1.** "Drop sampleRate and numChannels
+entirely" does not test the platform's preference for our recording — the
+`RecordConfig` defaults are 44100 Hz **stereo** at 128 kbps, so dropping both
+changes two variables at once and a working result would not say which one
+mattered. The probe therefore runs a 2×2 over sample rate and channel count
+rather than one defaults-vs-ours comparison.
+
+**One addition.** A `wav` row at 16 kHz mono. If `wav` at 16 kHz works and
+`aacLc` at 16 kHz does not, the problem is specifically the AAC encoder
+rather than the input rate — which is the difference between changing one
+constant and changing the audio format. Steps 1 and 2 of the brief would have
+found *a* working config; this finds out *why*.
+
+**Built as one run, not six.** `AudioService.probeEncoderConfigs` records 1.5
+seconds with each config and prints the byte count, triggered from a button
+on the settings screen. This session cannot run anything on the phone, so
+every round trip costs a rebuild and a message; collapsing six of those into
+one is the largest thing that could be done from here.
+
+**The dependency call: `audio_session` is removed.** It was added the day
+before to read the session category. It answered its question — the answer
+was "the session is fine" — and its iOS side is only half-registered here:
+the category read worked, `getRecordPermission` threw `MissingPluginException`
+every run. Fixing the registration would be work to keep a package we now
+have no use for, since `record` manages the category itself. It stays in the
+tree transitively under `just_audio`. Back to six dependencies.
+
+**The shipping config is deliberately unchanged.** `aacLc` 16 kHz mono is
+still what `_config` says, because changing it now would be committing to a
+fix ahead of the evidence — the exact thing that wasted the last round. The
+probe decides it.
+
+**Verification:** `flutter analyze` clean, `flutter test` 93 passing,
+`flutter build apk --debug` succeeds. **The probe has never been run.** No
+byte counts are known to this session, and none are claimed.

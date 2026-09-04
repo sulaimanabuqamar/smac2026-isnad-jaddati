@@ -46,13 +46,45 @@ there is nothing in the file to decode, and transcription failed for the same
 reason. We spent a round chasing them as separate problems; they are the same
 empty file.
 
-**Suspected cause, not yet confirmed.** `record` and `just_audio` both touch
-`AVAudioSession`. `just_audio` configures it for playback, and if the session
-is not in `playAndRecord` when `record` starts, iOS hands the encoder silence
-and it dutifully writes a header with no audio under it. Diagnostics are now
-in `AudioService.start` logging the category, mode, options and the OS-level
-record permission, before and after the recorder starts. **The fix is not
-written yet, because the diagnosis is not confirmed yet.**
+### Hypothesis 1: the audio session — **dead, disproved on the device**
+
+`record` and `just_audio` both touch `AVAudioSession`, and if the session is
+not in `playAndRecord` when recording starts, iOS hands the encoder silence.
+Plausible, and wrong.
+
+The log settled it: `record` sets the category itself — `soloAmbient` before
+the first start, `playAndRecord` after it and on every attempt since — with
+the permission granted, and the files still 28 bytes. **The fix we were about
+to write would have been a no-op on a bug that was not there.** `audio_session`
+has been removed again; there was nothing for it to do.
+
+Worth keeping in the record: this is the second hypothesis in a row that
+sounded right and was not. The first was that playback was still a path
+problem.
+
+### Hypothesis 2: the encoder rejects 16 kHz — **being tested**
+
+`RecordConfig` asks for `aacLc` at 16 kHz mono. iOS's AAC encoder is not
+reliable at 16 kHz, and when it refuses a rate it writes the container and no
+frames — header only, no exception, `stop()` returns normally. That matches 28
+bytes exactly.
+
+Not assumed. `AudioService.probeEncoderConfigs`, reachable from the settings
+screen, records 1.5 seconds with each of six configs and prints the byte
+count for each: platform defaults, then a 2×2 over sample rate and channel
+count, then `wav` at 16 kHz. The last one is the discriminator — if `wav` at
+16 kHz works and `aacLc` at 16 kHz does not, the problem is the AAC encoder
+and not the input rate.
+
+**If every row comes back at 28 bytes, the encoder is not the cause**, and
+the next place to look is `record` 7.1.1 on this iOS version. That is a real
+outcome, and it gets reported as one rather than answered with a third
+guess.
+
+We want to keep 16 kHz mono if iOS will allow it: it was chosen for upload
+size on a majlis connection, and Whisper resamples to 16 kHz anyway. The
+probe exists to find the smallest setting that actually works, not to
+abandon the reasoning behind the original one.
 
 ## Fixed regardless: a 28-byte file is no longer storable
 
@@ -123,15 +155,12 @@ Shorter than it was, and these are what to hammer next.
 
 ### 0. The 28-byte recording — the live bug
 
-- [ ] **What `AVAudioSession` category is actually set when `start()` runs.**
-      The diagnostics are in and have not yet been read off a device. Until
-      they are, the `playAndRecord` explanation is a hypothesis with a good
-      story behind it and no evidence.
-- [ ] Whether `record.hasPermission()` and the OS's own
-      `AVAudioSessionRecordPermission` agree. If they disagree, this is a
-      different bug entirely.
-- [ ] Whether `record` sets the category itself — hence logging before *and*
-      after `start()`.
+- [x] **The `AVAudioSession` category.** Read off the device: `soloAmbient`
+      before the first start, `playAndRecord` after, and `playAndRecord` on
+      every attempt since. `record` manages it itself. Hypothesis dead.
+- [x] **Permission.** Granted, confirmed.
+- [ ] **The encoder probe.** Six configs, one run, byte count for each. The
+      code is committed and has never been run.
 - [ ] A recording with actual audio in it. Nothing on this phone has ever
       produced one.
 
