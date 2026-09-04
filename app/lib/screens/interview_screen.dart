@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -178,16 +179,30 @@ class _InterviewScreenState extends State<InterviewScreen> {
 
     final session = _session!;
     final question = _question;
-    final recording = await widget.audio.stop();
+    final result = await widget.audio.stop();
 
     if (!mounted) return;
 
-    if (recording == null) {
-      setState(() => _phase = _Phase.ready);
-      _tell('That recording did not save. Nothing was lost — try again.');
-      return;
-    }
+    switch (result) {
+      // No file, or a file with no audio in it. Say which, and write nothing
+      // — a row here would be a segment that never plays and never
+      // transcribes, which reads to the user as a recording that saved.
+      case RecordingDiscarded(:final loss):
+        setState(() => _phase = _Phase.ready);
+        _tell(loss.message);
+        return;
 
+      case RecordingSaved(:final recording):
+        await _saveSegment(session, question, recording);
+    }
+  }
+
+  /// Writes the row for a recording that is already safe on disk.
+  Future<void> _saveSegment(
+    Session session,
+    BankQuestion? question,
+    Recording recording,
+  ) async {
     final seq = await widget.segments.nextSeq(session.id!);
     await widget.segments.create(
       Segment(
@@ -229,19 +244,85 @@ class _InterviewScreenState extends State<InterviewScreen> {
       if (mounted) setState(() => _playingPath = null);
       return;
     }
+    // Declared outside the try so the failure log can say whether we got as
+    // far as resolving the path at all.
+    File? resolved;
     try {
       // Resolved against this install, not against the one that recorded it.
-      final file = await AudioFiles.resolve(segment.audioPath);
-      await _player.setFilePath(file.path);
+      resolved = await AudioFiles.resolve(segment.audioPath);
+      await _player.setFilePath(resolved.path);
       await _player.play();
       if (mounted) setState(() => _playingPath = segment.audioPath);
-    } catch (_) {
-      // The row exists but the file does not. Before schema version 2 this
-      // was reached after every reinstall, because the stored path pointed
-      // into a container UUID that no longer existed — the file was there
-      // and we were looking in the wrong place. Now it means what it says.
+    } catch (error, stack) {
+      await _logPlaybackFailure(segment, resolved, error, stack);
+      // The message stays generic for the user. What actually happened goes
+      // to the console — this catch used to swallow it entirely, which is
+      // why a playback bug took a device and a guess to diagnose.
       if (mounted) _tell('That audio file is missing from this phone.');
     }
+  }
+
+  /// **Temporary diagnostics.** Prints what actually failed in [_play].
+  ///
+  /// Added 4 September 2026 because playback fails on a freshly recorded
+  /// segment on the device and the catch above reported nothing. Shows up in
+  /// `flutter run`. Remove once the cause is known — this is here to answer
+  /// one question, not to become logging.
+  Future<void> _logPlaybackFailure(
+    Segment segment,
+    File? resolved,
+    Object error,
+    StackTrace stack,
+  ) async {
+    final lines = <String>[
+      '=== PLAYBACK FAILED =======================================',
+      'segment    : id=${segment.id} seq=${segment.seq} '
+          'status=${segment.transcribeStatus.db}',
+      'duration_ms: ${segment.durationMs}',
+      'error type : ${error.runtimeType}',
+      'error      : $error',
+      'stored path: "${segment.audioPath}"',
+      'starts /   : ${segment.audioPath.startsWith('/')}',
+    ];
+
+    if (resolved == null) {
+      // AudioFiles.resolve threw, so the failure is in path_provider rather
+      // than in the file or the player.
+      lines.add('resolved   : <resolve() itself threw — see error above>');
+    } else {
+      lines.add('resolved   : ${resolved.path}');
+      try {
+        final exists = await resolved.exists();
+        lines.add('exists     : $exists');
+        lines.add(
+            'length     : ${exists ? '${await resolved.length()} bytes' : '—'}');
+
+        // If the file is not where we looked, the next question is always
+        // "then what is in that directory", so answer it in the same breath.
+        final dir = resolved.parent;
+        if (await dir.exists()) {
+          final names = await dir
+              .list()
+              .map((e) => e.path.split('/').last)
+              .toList();
+          lines.add('dir        : ${dir.path}');
+          lines.add(
+              'dir holds  : ${names.isEmpty ? '<empty>' : names.join(', ')}');
+        } else {
+          lines.add('dir        : ${dir.path}  <DOES NOT EXIST>');
+        }
+      } catch (inspectionError) {
+        lines.add('filesystem : could not be inspected — $inspectionError');
+      }
+    }
+    lines.add('===========================================================');
+
+    // One call per line: debugPrint wraps and throttles long strings, and a
+    // truncated diagnostic is worse than none.
+    for (final line in lines) {
+      debugPrint(line);
+    }
+    debugPrintStack(stackTrace: stack, label: 'playback', maxFrames: 12);
   }
 
   Future<void> _endSession() async {

@@ -41,6 +41,11 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   record: ^7.1.1
+
+  # Reads and sets the iOS AVAudioSession category. Already in the tree as a
+  # transitive dependency of just_audio, declared here because we import it
+  # directly. Owner: Adel, with `record` and `just_audio`.
+  audio_session: ^0.2.4
   just_audio: ^0.10.6
   sqflite: ^2.4.3
   path_provider: ^2.1.6
