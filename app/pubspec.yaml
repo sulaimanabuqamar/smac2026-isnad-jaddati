@@ -50,7 +50,6 @@ dependencies:
   # --dart-define-from-file=.env` reads the same file with the SDK we already
   # have, and does not require .env to be declared as a bundled asset — which
   # would have made a clone without one fail to build at all.
-  google_mlkit_translation: ^0.15.1
   intl: ^0.20.3
 
 dev_dependencies:
