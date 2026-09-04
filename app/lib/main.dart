@@ -10,6 +10,9 @@ import 'data/session_repository.dart';
 import 'screens/archive_screen.dart';
 import 'screens/people_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/api_keys.dart';
+import 'services/transcription_queue.dart';
+import 'services/transcription_service.dart';
 import 'theme.dart';
 
 Future<void> main() async {
@@ -23,11 +26,34 @@ Future<void> main() async {
 }
 
 class JaddatiApp extends StatelessWidget {
-  JaddatiApp({super.key, required Database db})
-      : people = PersonRepository(db),
-        sessions = SessionRepository(db),
-        segments = SegmentRepository(db),
-        bank = BankQuestionRepository(db);
+  /// A factory rather than an initialiser list because the queue needs the
+  /// same [SegmentRepository] the screens get, and an initialiser list cannot
+  /// refer to a field it is still building. Two repositories over one
+  /// database would work, but "which one is the real one" is a question
+  /// nobody should have to answer.
+  factory JaddatiApp({Key? key, required Database db}) {
+    final segments = SegmentRepository(db);
+    return JaddatiApp._(
+      key: key,
+      people: PersonRepository(db),
+      sessions: SessionRepository(db),
+      segments: segments,
+      bank: BankQuestionRepository(db),
+      transcription: TranscriptionQueue(
+        segments: segments,
+        service: TranscriptionService(apiKey: ApiKeys.groq),
+      ),
+    );
+  }
+
+  const JaddatiApp._({
+    super.key,
+    required this.people,
+    required this.sessions,
+    required this.segments,
+    required this.bank,
+    required this.transcription,
+  });
 
   /// Built once and handed to the screens that need it.
   ///
@@ -38,6 +64,14 @@ class JaddatiApp extends StatelessWidget {
   final SessionRepository sessions;
   final SegmentRepository segments;
   final BankQuestionRepository bank;
+
+  /// One queue for the whole app, not one per interview.
+  ///
+  /// The queue holds work that outlives the screen that created it: a
+  /// segment recorded in the kitchen and uploaded twenty minutes later in
+  /// the car. Building it per-screen would abandon that work — and would let
+  /// two screens upload the same row twice.
+  final TranscriptionQueue transcription;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +112,7 @@ class JaddatiApp extends StatelessWidget {
         sessions: sessions,
         segments: segments,
         bank: bank,
+        transcription: transcription,
       ),
     );
   }

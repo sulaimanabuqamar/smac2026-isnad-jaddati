@@ -6,6 +6,7 @@ import '../data/person_repository.dart';
 import '../data/segment_repository.dart';
 import '../data/session_repository.dart';
 import '../services/audio_service.dart';
+import '../services/transcription_queue.dart';
 import '../models/person.dart';
 import '../theme.dart';
 import '../widgets/bilingual.dart';
@@ -26,12 +27,14 @@ class PeopleScreen extends StatefulWidget {
     required this.sessions,
     required this.segments,
     required this.bank,
+    required this.transcription,
   });
 
   final PersonRepository people;
   final SessionRepository sessions;
   final SegmentRepository segments;
   final BankQuestionRepository bank;
+  final TranscriptionQueue transcription;
 
   @override
   State<PeopleScreen> createState() => _PeopleScreenState();
@@ -76,6 +79,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
           segments: widget.segments,
           bank: widget.bank,
           audio: AudioService(),
+          transcription: widget.transcription,
         ),
       ),
     );
