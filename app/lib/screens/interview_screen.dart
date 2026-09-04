@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -9,14 +11,21 @@ import '../models/person.dart';
 import '../models/segment.dart';
 import '../models/session.dart';
 import '../services/audio_service.dart';
+import '../services/transcription_queue.dart';
+import '../services/transcription_service.dart';
 import '../theme.dart';
 import '../widgets/bilingual.dart';
 
 /// The interview loop: one question, one answer, one file. Repeat.
 ///
-/// No AI in this screen. The question comes from the offline bank seeded at
-/// first run, and the recording never leaves the phone. Transcription is
-/// Slice 3 and hangs off the rows this screen writes.
+/// From Slice 3 the transcripts appear underneath the answers, but note what
+/// did not change: nothing on the recording path awaits the network. Saving a
+/// segment hands the queue a row and returns immediately. If transcription is
+/// slow, failing or impossible, this screen behaves exactly as it did in
+/// Slice 2 — which is the reliability rule in CLAUDE.md, made structural.
+///
+/// The question still comes from the offline bank. Generating it from what
+/// she just said is Slice 4 and reads the transcripts this slice writes.
 class InterviewScreen extends StatefulWidget {
   const InterviewScreen({
     super.key,
@@ -25,6 +34,7 @@ class InterviewScreen extends StatefulWidget {
     required this.segments,
     required this.bank,
     required this.audio,
+    required this.transcription,
   });
 
   final Person person;
@@ -32,6 +42,7 @@ class InterviewScreen extends StatefulWidget {
   final SegmentRepository segments;
   final BankQuestionRepository bank;
   final AudioService audio;
+  final TranscriptionQueue transcription;
 
   @override
   State<InterviewScreen> createState() => _InterviewScreenState();
@@ -61,6 +72,12 @@ class _InterviewScreenState extends State<InterviewScreen> {
     super.initState();
     _bootstrap();
 
+    // The queue writes to the database from outside this screen, so the
+    // screen has to be told when to re-read. One listener, one reload — this
+    // is the whole reason ChangeNotifier is enough and a state-management
+    // package is not.
+    widget.transcription.addListener(_onQueueChanged);
+
     // The player does not tell us when it stops unless we ask. Without this
     // the play icon on a finished segment stays a stop icon forever.
     _player.playerStateStream.listen((state) {
@@ -72,9 +89,25 @@ class _InterviewScreenState extends State<InterviewScreen> {
 
   @override
   void dispose() {
+    widget.transcription.removeListener(_onQueueChanged);
     _player.dispose();
     widget.audio.dispose();
+    // The queue itself is not disposed here. It belongs to the app, not to
+    // this screen, and it has work to finish after we are gone.
     super.dispose();
+  }
+
+  /// Re-reads this session's rows because the queue changed something.
+  ///
+  /// Reads from the database rather than accepting an updated segment from
+  /// the queue, so there is exactly one place transcripts come from and no
+  /// chance of the screen and the database disagreeing about a row.
+  Future<void> _onQueueChanged() async {
+    final session = _session;
+    if (session == null) return;
+    final segments = await widget.segments.getForSession(session.id!);
+    if (!mounted) return;
+    setState(() => _segments = segments);
   }
 
   /// Finds the session to work in, or starts one.
@@ -103,6 +136,11 @@ class _InterviewScreenState extends State<InterviewScreen> {
       _question = question;
       _phase = _Phase.ready;
     });
+
+    // Opening the screen is a good moment to try again: the phone may have
+    // found signal since the last time anything ran, and there may be rows
+    // waiting from a session that ended days ago.
+    unawaited(widget.transcription.run());
   }
 
   Future<void> _startRecording() async {
@@ -162,6 +200,12 @@ class _InterviewScreenState extends State<InterviewScreen> {
       ),
     );
 
+    // Not awaited, and that is the design. The row and its file are already
+    // safe; the upload is somebody else's problem now. Awaiting here would
+    // put the network between her answer and the next question, which is
+    // exactly the coupling decision D1 exists to prevent.
+    unawaited(widget.transcription.run());
+
     final segments = await widget.segments.getForSession(session.id!);
     final next = await widget.bank.questionAt(segments.length);
 
@@ -171,6 +215,11 @@ class _InterviewScreenState extends State<InterviewScreen> {
       _question = next;
       _phase = _Phase.ready;
     });
+  }
+
+  /// Puts one failed segment back in the queue, because the user asked.
+  Future<void> _retryTranscription(Segment segment) async {
+    await widget.transcription.retry(segment.id!);
   }
 
   Future<void> _play(Segment segment) async {
@@ -277,10 +326,20 @@ class _InterviewScreenState extends State<InterviewScreen> {
                     return _SegmentRow(
                       segment: s,
                       playing: _playingPath == s.audioPath,
+                      transcribing:
+                          widget.transcription.activeSegmentId == s.id,
                       onPlay: () => _play(s),
+                      onRetry: () => _retryTranscription(s),
                     );
                   },
                 ),
+        ),
+
+        _QueueBanner(
+          paused: widget.transcription.pausedBy,
+          waiting: _segments
+              .where((s) => s.transcribeStatus == TranscribeStatus.pending)
+              .length,
         ),
 
         // The record button lives in the bottom third, per docs/spec.md
@@ -366,37 +425,101 @@ class _RecordButton extends StatelessWidget {
   }
 }
 
+/// One saved answer: play it, read it, and see where its transcript got to.
+///
+/// The question is the quiet line and her words are the loud one. That is the
+/// right way round — the question is ours and the answer is hers.
 class _SegmentRow extends StatelessWidget {
   const _SegmentRow({
     required this.segment,
     required this.playing,
+    required this.transcribing,
     required this.onPlay,
+    required this.onRetry,
   });
 
   final Segment segment;
   final bool playing;
+
+  /// True only for the one segment being uploaded right now. Queue state,
+  /// not database state — there is no `transcribing` row in the schema,
+  /// because if the app were killed mid-upload that row would be stuck in it
+  /// forever with nothing to move it back.
+  final bool transcribing;
+
   final VoidCallback onPlay;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final transcript = segment.transcriptAr;
+    final failed = segment.transcribeStatus == TranscribeStatus.failed;
+
     return Card(
-      child: ListTile(
-        leading: IconButton(
-          icon: Icon(
-            playing ? Icons.stop_circle_outlined : Icons.play_circle_outline,
-            size: 34,
-            color: JaddatiTheme.clay,
-          ),
-          onPressed: onPlay,
-        ),
-        title: ArabicText(segment.questionText, maxLines: 2),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            '${segment.seq}  ·  ${_length(segment.durationMs)}'
-            '  ·  ${_status(segment.transcribeStatus)}',
-            style: JaddatiTheme.english.copyWith(fontSize: 15),
-          ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 16, 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            IconButton(
+              icon: Icon(
+                playing
+                    ? Icons.stop_circle_outlined
+                    : Icons.play_circle_outline,
+                size: 34,
+                color: JaddatiTheme.clay,
+              ),
+              onPressed: onPlay,
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ArabicText(
+                    segment.questionText,
+                    maxLines: 2,
+                    style: JaddatiTheme.arabic.copyWith(
+                      fontSize: 17,
+                      height: 1.5,
+                      color: JaddatiTheme.inkSoft,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Her answer, if we have it. Full size and full colour,
+                  // and never truncated: this is the thing being kept.
+                  if (transcript != null && transcript.isNotEmpty)
+                    ArabicText(transcript)
+                  else
+                    _TranscriptPending(
+                      transcribing: transcribing,
+                      failed: failed,
+                    ),
+
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text(
+                        '${segment.seq}  ·  ${_length(segment.durationMs)}',
+                        style: JaddatiTheme.english.copyWith(fontSize: 15),
+                      ),
+                      const Spacer(),
+                      if (failed)
+                        TextButton(
+                          onPressed: onRetry,
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 32),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text('Try again'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -408,15 +531,87 @@ class _SegmentRow extends StatelessWidget {
     final m = total ~/ 60, s = total % 60;
     return m > 0 ? '$m:${s.toString().padLeft(2, '0')}' : '${s}s';
   }
+}
 
-  /// Shown from Slice 2 even though nothing sets it to anything but pending
-  /// yet. The queue is visible from the day the rows exist, so "waiting to
-  /// be transcribed" is a state the user has seen before it ever matters.
-  static String _status(TranscribeStatus status) => switch (status) {
-        TranscribeStatus.pending => 'not transcribed yet',
-        TranscribeStatus.done => 'transcribed',
-        TranscribeStatus.failed => 'transcription failed',
-      };
+/// The placeholder where a transcript will go.
+///
+/// Deliberately worded so that none of these three states reads like
+/// something was lost. The audio is saved in all of them, and the only thing
+/// at stake is text we can ask for again.
+class _TranscriptPending extends StatelessWidget {
+  const _TranscriptPending({required this.transcribing, required this.failed});
+
+  final bool transcribing;
+  final bool failed;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, label) = switch ((transcribing, failed)) {
+      (true, _) => (Icons.cloud_upload_outlined, 'Transcribing…'),
+      (_, true) => (Icons.error_outline, 'Could not transcribe — audio saved'),
+      _ => (Icons.schedule, 'Waiting to transcribe'),
+    };
+
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: JaddatiTheme.inkSoft),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            label,
+            style: JaddatiTheme.english.copyWith(
+              fontSize: 15,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A line above the record button, shown only when the queue is stuck.
+///
+/// It exists to make the offline path visible instead of merely survivable.
+/// Without it, a session recorded in a basement looks like a session where
+/// transcription is broken; with it, the app has told you what it is waiting
+/// for and that your recordings are fine.
+class _QueueBanner extends StatelessWidget {
+  const _QueueBanner({required this.paused, required this.waiting});
+
+  final TranscriptionFailure? paused;
+  final int waiting;
+
+  @override
+  Widget build(BuildContext context) {
+    final reason = paused;
+    if (reason == null || waiting == 0) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: JaddatiTheme.linen,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_outlined,
+              size: 19, color: JaddatiTheme.inkSoft),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${reason.message}  '
+              '$waiting ${waiting == 1 ? 'answer is' : 'answers are'} '
+              'saved on this phone and will transcribe later.',
+              style: JaddatiTheme.english.copyWith(fontSize: 15),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Shown instead of the interview when the microphone is unavailable.
