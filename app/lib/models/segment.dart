@@ -45,6 +45,14 @@ class Segment {
 
   final String questionText;
   final QuestionSource questionSource;
+  /// **Relative to the app documents directory**, always —
+  /// `recordings/session_3/seg_1_1757000000.m4a`, never a path beginning
+  /// with `/`.
+  ///
+  /// It has to be relative because on iOS the app container is a UUID that
+  /// changes on every install: an absolute path written by one build points
+  /// nowhere in the next. Resolve it with `AudioFiles.resolve` at the moment
+  /// you need the file, and never store the result.
   final String audioPath;
   final int? durationMs;
   final String? transcriptAr;

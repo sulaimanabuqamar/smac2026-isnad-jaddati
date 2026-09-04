@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite/sqflite.dart';
 
 import '../models/bank_question.dart';
+import '../services/audio_files.dart';
 
 /// Opens and owns the one SQLite database the app uses.
 ///
@@ -17,7 +18,10 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const fileName = 'jaddati.db';
-  static const version = 1;
+
+  /// Version 2, September 2026: `segment.audio_path` became relative to the
+  /// app documents directory. See [migrateToRelativeAudioPaths].
+  static const version = 2;
 
   /// Where `bank.json` lives inside the bundle. Declared in `pubspec.yaml`
   /// under `flutter: assets:`, which is what puts it in the built app.
@@ -41,6 +45,7 @@ class AppDatabase {
         await createSchema(db);
         await seedBankQuestions(db, await rootBundle.loadString(bankAssetPath));
       },
+      onUpgrade: migrate,
     );
   }
 
@@ -58,7 +63,11 @@ class AppDatabase {
     await db.execute('PRAGMA foreign_keys = ON');
   }
 
-  /// Creates schema version 1, exactly as specified in docs/spec.md section 8.
+  /// Creates the schema, as specified in docs/spec.md section 8.
+  ///
+  /// The tables are unchanged between versions 1 and 2 — version 2 changed
+  /// what goes *into* `segment.audio_path`, not the column — so a fresh
+  /// install gets this and an existing one gets [migrate].
   ///
   /// Separate from [_open] so tests can build the same schema in an in-memory
   /// database. If this and the spec ever disagree, one of them is a bug.
@@ -136,6 +145,49 @@ class AppDatabase {
     // Finding the pending transcription queue is a filtered scan otherwise.
     await db.execute(
         'CREATE INDEX idx_segment_status ON segment(transcribe_status)');
+  }
+
+  /// Runs the migrations between two schema versions.
+  ///
+  /// Separate from [_open] so tests can drive it against a database they
+  /// built at the old version, which is the only way to know a migration
+  /// works before it runs on somebody's phone.
+  static Future<void> migrate(Database db, int from, int to) async {
+    if (from < 2 && to >= 2) await migrateToRelativeAudioPaths(db);
+  }
+
+  /// Schema version 2: `audio_path` is stored relative to the app documents
+  /// directory rather than absolutely.
+  ///
+  /// **Why this migration exists.** On iOS the app container is a UUID that
+  /// changes on every install. Version 1 stored the absolute path the
+  /// recorder was given, so after a rebuild every row pointed at a directory
+  /// that no longer existed. The audio was all still on the phone; we were
+  /// looking in last week's folder for it. Playback reported the file as
+  /// missing, and transcription failed the segment permanently.
+  ///
+  /// **Why it rewrites rather than wipes.** The rows are correct — only the
+  /// prefix is wrong, and it is a prefix we can identify exactly. Deleting
+  /// them would throw away recordings to avoid writing eleven lines of SQL,
+  /// and recordings are the one thing in this app we have promised not to
+  /// lose.
+  ///
+  /// `instr` finds the marker, `substr` keeps everything after it. Rows that
+  /// are already relative do not match `'/%'` and are left alone, so running
+  /// this twice is harmless. A row that matches no marker is left absolute
+  /// rather than guessed at — it would be a path this app never wrote.
+  static Future<void> migrateToRelativeAudioPaths(Database db) async {
+    for (final marker in AudioFiles.documentsMarkers) {
+      await db.rawUpdate(
+        '''
+        UPDATE segment
+           SET audio_path = substr(audio_path, instr(audio_path, ?) + ?)
+         WHERE audio_path LIKE '/%'
+           AND instr(audio_path, ?) > 0
+        ''',
+        [marker, marker.length, marker],
+      );
+    }
   }
 
   /// Parses `bank.json` and writes every question into `bank_question`.

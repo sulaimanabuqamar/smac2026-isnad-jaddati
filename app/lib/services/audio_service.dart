@@ -1,7 +1,8 @@
 import 'dart:io';
 
-import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+
+import 'audio_files.dart';
 
 /// A finished recording: a file that exists on disk, with bytes in it.
 ///
@@ -10,12 +11,16 @@ import 'package:record/record.dart';
 /// the file before it does.
 class Recording {
   const Recording({
-    required this.path,
+    required this.relativePath,
     required this.duration,
     required this.bytes,
   });
 
-  final String path;
+  /// Relative to the app documents directory, and the value that goes into
+  /// `segment.audio_path`. Not absolute: see [AudioFiles] for the reinstall
+  /// bug that rule exists to prevent.
+  final String relativePath;
+
   final Duration duration;
   final int bytes;
 
@@ -51,7 +56,12 @@ class AudioService {
   /// doing while the grandmother waits for the next question.
   final Stopwatch _clock = Stopwatch();
 
+  /// The absolute path the encoder is writing to, for this recording only.
+  /// Never stored anywhere that outlives the app.
   String? _currentPath;
+
+  /// The same file, said the way the database says it.
+  String? _relativePath;
 
   bool get isRecording => _clock.isRunning;
 
@@ -75,19 +85,6 @@ class AudioService {
     numChannels: 1,
   );
 
-  /// Where this session's audio lives.
-  ///
-  /// Under the app documents directory, which on both platforms is backed up
-  /// and is not cleared by the OS when storage runs low — unlike the cache
-  /// directory, which is. The recording is the irreplaceable thing; it does
-  /// not go anywhere the system is allowed to delete.
-  Future<Directory> _sessionDir(int sessionId) async {
-    final root = await getApplicationDocumentsDirectory();
-    final dir = Directory('${root.path}/recordings/session_$sessionId');
-    if (!await dir.exists()) await dir.create(recursive: true);
-    return dir;
-  }
-
   /// Begins recording. Returns null on success, or why it could not start.
   Future<RecordingBlocker?> start({
     required int sessionId,
@@ -95,22 +92,28 @@ class AudioService {
   }) async {
     if (!await hasPermission()) return RecordingBlocker.permissionDenied;
 
-    final dir = await _sessionDir(sessionId);
+    // Audio lives under the app documents directory, which on both platforms
+    // is backed up and is not cleared by the OS when storage runs low —
+    // unlike the cache directory, which is. The recording is the
+    // irreplaceable thing; it does not go anywhere the system may delete.
+    final relative = AudioFiles.segmentPath(
+      sessionId: sessionId,
+      seq: seq,
+      stamp: DateTime.now().millisecondsSinceEpoch,
+    );
 
-    // The timestamp is in the filename as well as the sequence number. If a
-    // segment is ever re-recorded, the old file is not overwritten — we would
-    // rather leak a file we can delete later than destroy audio we cannot
-    // get back.
-    final stamp = DateTime.now().millisecondsSinceEpoch;
-    final path = '${dir.path}/seg_${seq}_$stamp.m4a';
+    // The encoder is the only thing in this app that gets an absolute path,
+    // and it gets one because it has to open a file. Nothing keeps it.
+    final absolute = await AudioFiles.prepare(relative);
 
     try {
-      await _recorder.start(_config, path: path);
+      await _recorder.start(_config, path: absolute);
     } catch (_) {
       return RecordingBlocker.recorderUnavailable;
     }
 
-    _currentPath = path;
+    _relativePath = relative;
+    _currentPath = absolute;
     _clock
       ..reset()
       ..start();
@@ -139,8 +142,10 @@ class AudioService {
     _clock.stop();
 
     final path = returned ?? _currentPath;
+    final relative = _relativePath;
     _currentPath = null;
-    if (path == null) return null;
+    _relativePath = null;
+    if (path == null || relative == null) return null;
 
     final file = File(path);
     if (!await file.exists()) return null;
@@ -157,7 +162,7 @@ class AudioService {
     }
 
     return Recording(
-      path: path,
+      relativePath: relative,
       duration: _clock.elapsed,
       bytes: bytes,
     );
@@ -170,6 +175,7 @@ class AudioService {
     _clock.stop();
     final path = _currentPath;
     _currentPath = null;
+    _relativePath = null;
     if (path == null) return;
     final file = File(path);
     if (await file.exists()) await file.delete();

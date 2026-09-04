@@ -10,6 +10,7 @@ import '../models/bank_question.dart';
 import '../models/person.dart';
 import '../models/segment.dart';
 import '../models/session.dart';
+import '../services/audio_files.dart';
 import '../services/audio_service.dart';
 import '../services/transcription_queue.dart';
 import '../services/transcription_service.dart';
@@ -194,7 +195,7 @@ class _InterviewScreenState extends State<InterviewScreen> {
         seq: seq,
         questionText: question?.textAr ?? '',
         questionSource: QuestionSource.bank,
-        audioPath: recording.path,
+        audioPath: recording.relativePath,
         durationMs: recording.durationMs,
         createdAt: DateTime.now(),
       ),
@@ -229,12 +230,16 @@ class _InterviewScreenState extends State<InterviewScreen> {
       return;
     }
     try {
-      await _player.setFilePath(segment.audioPath);
+      // Resolved against this install, not against the one that recorded it.
+      final file = await AudioFiles.resolve(segment.audioPath);
+      await _player.setFilePath(file.path);
       await _player.play();
       if (mounted) setState(() => _playingPath = segment.audioPath);
     } catch (_) {
-      // The row exists but the file does not — the only way this happens is
-      // if something outside the app removed it. Say so rather than crash.
+      // The row exists but the file does not. Before schema version 2 this
+      // was reached after every reinstall, because the stored path pointed
+      // into a container UUID that no longer existed — the file was there
+      // and we were looking in the wrong place. Now it means what it says.
       if (mounted) _tell('That audio file is missing from this phone.');
     }
   }

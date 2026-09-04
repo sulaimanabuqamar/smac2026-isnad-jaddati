@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/segment_repository.dart';
 import '../models/segment.dart';
+import 'audio_files.dart';
 import 'transcription_service.dart';
 
 /// Works through the segments waiting to be transcribed, one at a time.
@@ -19,10 +20,23 @@ import 'transcription_service.dart';
 /// management library: it is a list of callbacks and a method that calls
 /// them. The interview screen adds one listener and reloads its rows.
 class TranscriptionQueue extends ChangeNotifier {
-  TranscriptionQueue({required this.segments, required this.service});
+  TranscriptionQueue({
+    required this.segments,
+    required this.service,
+    Future<File> Function(String relativePath)? resolveAudio,
+  }) : resolveAudio = resolveAudio ?? AudioFiles.resolve;
 
   final SegmentRepository segments;
   final TranscriptionService service;
+
+  /// Turns a stored relative path into a file on this install.
+  ///
+  /// Injected for the same reason the HTTP client is: the real one calls
+  /// `getApplicationDocumentsDirectory`, which needs a platform channel and
+  /// therefore a device. Without this seam every queue test would need a
+  /// phone, and the queue's retry decisions are exactly what we want to be
+  /// able to test without one.
+  final Future<File> Function(String relativePath) resolveAudio;
 
   /// How long to wait before trying again after the network let us down.
   ///
@@ -106,8 +120,10 @@ class TranscriptionQueue extends ChangeNotifier {
     _activeSegmentId = segment.id;
     _notify();
 
+    // Resolved now, against this install's documents directory. The row may
+    // have been written by a build whose container UUID is long gone.
     final result = await service.transcribe(
-      File(segment.audioPath),
+      await resolveAudio(segment.audioPath),
       audioDuration: segment.durationMs == null
           ? null
           : Duration(milliseconds: segment.durationMs!),
