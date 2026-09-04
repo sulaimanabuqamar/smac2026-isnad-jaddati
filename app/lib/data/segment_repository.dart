@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/segment.dart';
@@ -108,5 +111,47 @@ class SegmentRepository {
       [status.db],
     );
     return rows.first['n'] as int;
+  }
+
+  /// Removes segments whose audio file is present but too small to be audio,
+  /// and deletes the file with them. Returns how many went.
+  ///
+  /// This exists because four rows were written before the 28-byte guard did:
+  /// an m4a header with no frames behind it, which will never play and never
+  /// transcribe. A row like that is worse than no row, because it looks to
+  /// the user like a recording that saved.
+  ///
+  /// **It only deletes what it can prove is dead.** A row whose file is
+  /// *missing* is deliberately left alone. Missing is exactly what the
+  /// reinstall bug looked like — every file on the phone appeared absent
+  /// because we were resolving against the wrong container — and a sweep
+  /// that deleted on absence would have destroyed the whole archive that
+  /// morning instead of fixing it. A file we can open and measure is a
+  /// different class of evidence from a file we cannot find.
+  ///
+  /// The resolver is injected for the same reason the queue's is: resolving
+  /// a path needs a platform channel, and this needs to be testable without
+  /// a phone.
+  Future<int> deleteEmptyRecordings({
+    required Future<File> Function(String relativePath) resolveAudio,
+    required int minimumBytes,
+  }) async {
+    final rows = await _db.query('segment', columns: ['id', 'audio_path']);
+    var deleted = 0;
+
+    for (final row in rows) {
+      final id = row['id'] as int;
+      final file = await resolveAudio(row['audio_path'] as String);
+
+      // Absence proves nothing. Leave it.
+      if (!await file.exists()) continue;
+      if (await file.length() >= minimumBytes) continue;
+
+      await _db.delete('segment', where: 'id = ?', whereArgs: [id]);
+      await file.delete();
+      deleted++;
+      debugPrint('removed empty segment $id — ${row['audio_path']}');
+    }
+    return deleted;
   }
 }

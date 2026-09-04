@@ -11,6 +11,8 @@ import 'screens/archive_screen.dart';
 import 'screens/people_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/api_keys.dart';
+import 'services/audio_files.dart';
+import 'services/audio_service.dart';
 import 'services/transcription_queue.dart';
 import 'services/transcription_service.dart';
 import 'theme.dart';
@@ -22,6 +24,20 @@ Future<void> main() async {
   // to render a "database not ready yet" state.
   WidgetsFlutterBinding.ensureInitialized();
   final db = await AppDatabase.instance.database;
+
+  // Clears out segments whose audio is a container with nothing in it — the
+  // rows written before AudioService learned to reject a 28-byte file. It
+  // deletes only what it can prove is dead and never acts on a file it
+  // simply cannot find; see SegmentRepository.deleteEmptyRecordings.
+  //
+  // Runs on every launch rather than once, because it is one file check per
+  // segment and a permanent guard is worth more than a migration that only
+  // catches the rows we already know about.
+  await SegmentRepository(db).deleteEmptyRecordings(
+    resolveAudio: AudioFiles.resolve,
+    minimumBytes: AudioService.minimumBytes,
+  );
+
   runApp(JaddatiApp(db: db));
 }
 
