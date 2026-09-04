@@ -585,3 +585,59 @@ probe decides it.
 **Verification:** `flutter analyze` clean, `flutter test` 93 passing,
 `flutter build apk --debug` succeeds. **The probe has never been run.** No
 byte counts are known to this session, and none are claimed.
+
+---
+
+## 2026-09-05 — Sulaiman — Claude Code (CLI) — downgrading `record`
+
+**Prompt:** "Stop debugging record. We're replacing it. [...] Cheapest fix
+first: downgrade record to the latest 5.x — that line has years of production
+use behind it where 7.1.1 does not. Resolve the actual version yourself, don't
+guess one. The API changed between 5 and 7 (AudioRecorder vs Record, and the
+config class), so update AudioService accordingly. Nothing outside AudioService
+should need to change — if it does, that's a seam we got wrong and worth
+telling me about. [...] If 5.x also gives 28 bytes, stop and tell me."
+
+**What we did with it:**
+
+**Version resolved, not guessed:** latest 5.x on pub.dev is **5.2.1**. Pinned
+exactly rather than with a caret, because with three days left reproducibility
+beats picking up an untried patch.
+
+**The expected API port was not needed.** The `Record` → `AudioRecorder`
+rename happened at 4.x → 5.x, not 5.x → 7.x. Everything `AudioService` uses —
+`AudioRecorder`, `start(config, path:)`, `stop()`, `cancel()`,
+`hasPermission()`, `dispose()`, `RecordConfig`, `AudioEncoder` — is identical
+across both. **Zero lines of Dart changed**, in `AudioService` or anywhere
+else. The seam was not wrong; it was not even exercised. The only edits in
+this change are `pubspec.yaml` and generated lockfiles.
+
+**One real obstacle, and it was not in our code.** `record` 5.2.1 allows
+`record_linux` only below 1.0.0, and the newest release in that range does not
+implement a named argument that `record_platform_interface` 1.5.0 added, while
+`record_android` and `record_web` both require that newer interface. There is
+no resolution inside 5.2.1's own constraints that compiles. It breaks the
+**iOS** build too, which took a real build to discover: `flutter analyze` and
+`flutter test` both pass, because the analyzer never looks at it — but
+Flutter's generated `dart_plugin_registrant.dart` imports every platform
+package regardless of target, so `record_linux` must compile for a phone.
+Fixed with the project's only `dependency_overrides` entry,
+`record_linux: ^1.3.1`, which targets the same interface as the Android and
+web packages. Documented in `pubspec.yaml` and `docs/spec.md` §10, and it goes
+when we leave 5.x.
+
+**Verified by building, not by analyzing.** This is the lesson of the round:
+`analyze` clean and 93 tests passing said nothing about whether the app could
+be built for a device. `flutter build ios --no-codesign` is what caught the
+resolution break, and it now succeeds — 18.4 MB, with `record_darwin` 1.2.2
+compiled in place of `record_ios`.
+
+**Flagged, not fixed:** `pod install` re-added the *Embed Pods Frameworks*
+build phase that was removed yesterday when ML Kit was dropped, because
+`record_darwin` needs it. If the device install fails again, that is the first
+place to look. Also, `record_android` applies the Kotlin Gradle Plugin, which
+Flutter warns will fail to build in future versions — irrelevant this week,
+real later.
+
+**No byte counts are known to this session.** It cannot run the app on the
+phone. The byte-count print in `stop()` is untouched, as asked.

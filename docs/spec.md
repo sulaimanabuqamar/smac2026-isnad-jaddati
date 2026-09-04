@@ -197,12 +197,31 @@ named on slide 36 as a cross-platform option the organizers teach.
 
 | Package | Does | Owner |
 |---|---|---|
-| `record` | Captures microphone audio to m4a, and requests the microphone permission via `hasPermission()` | Adel |
+| `record` | Captures microphone audio to m4a, and requests the microphone permission via `hasPermission()`. **Pinned to 5.2.1** — see below | Adel |
 | `just_audio` | Plays a segment back | Adel |
 | `sqflite` | Local database | Sulaiman |
 | `path_provider` | Finds the writable audio directory | Sulaiman |
 | `http` | Two API calls | Sulaiman |
 | `intl` | Dates and durations in both languages | Bilal |
+
+`record` is pinned to **5.2.1**, downgraded from 7.1.1 on 5 September. On iOS
+18.5, 7.1.1 reported a successful recording and wrote a 28-byte container with
+no audio frames, every time — a package reporting a success it had not
+achieved. The two lines ship different iOS implementations entirely: 7.x uses
+`record_ios`, 5.x uses `record_darwin`. Pinned exactly rather than `^5.2.1`
+because with three days left, reproducibility is worth more than a patch
+release nobody has tried.
+
+That downgrade needs the project's one `dependency_overrides` entry,
+`record_linux: ^1.3.1`. `record` 5.2.1 allows `record_linux` only below 1.0.0,
+and the newest release in that range does not implement a named argument the
+platform interface added — while `record_android` and `record_web` both
+require the newer interface. No resolution inside 5.2.1's own constraints
+compiles. It breaks the **iOS** build too, which is not obvious: Flutter's
+generated `dart_plugin_registrant.dart` imports every platform package
+regardless of target, so `record_linux` has to compile for a phone. We never
+build for Linux; the package only has to compile. The override goes the moment
+we leave 5.x.
 
 `google_mlkit_translation` was dropped on 4 September: its unsigned
 `FBLPromises` framework blocked installing on the device. On-device

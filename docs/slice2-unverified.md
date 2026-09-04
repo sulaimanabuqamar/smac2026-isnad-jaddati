@@ -86,6 +86,32 @@ size on a majlis connection, and Whisper resamples to 16 kHz anyway. The
 probe exists to find the smallest setting that actually works, not to
 abandon the reasoning behind the original one.
 
+### Hypothesis 3: the package — **being tested, and we stopped debugging**
+
+Every hypothesis died on the same wall. Session category correct, permission
+granted, path correct, `stop()` clean, and a 28-byte file. `record` 7.1.1 on
+iOS 18.5 reports a success it did not achieve, and with three days left the
+cheapest move is to stop diagnosing it and change it.
+
+`record` is now pinned to **5.2.1**. The 5.x line has years of production use
+behind it, and — the part that makes this more than a version number — it
+ships a completely different iOS implementation: 7.x uses `record_ios`, 5.x
+uses `record_darwin`.
+
+**Nothing in the app changed.** Not one line of Dart. `AudioRecorder`,
+`start(config, path:)`, `stop()`, `cancel()`, `hasPermission()`, `dispose()`
+and `RecordConfig` are identical across the two versions — the rename the
+downgrade was expected to need happened at 4.x → 5.x, not 5.x → 7.x. The
+`AudioService` seam held exactly as it was supposed to: the package under it
+was replaced and no caller noticed.
+
+The recording config is deliberately **unchanged** at `aacLc` 16 kHz mono, so
+this is one variable moving and not two.
+
+If 5.2.1 still writes 28 bytes, it is not the package, and the next decision —
+`flutter_sound`, or a direct `AVAudioRecorder` channel — is a call to make
+deliberately rather than a fourth guess.
+
 ## Fixed regardless: a 28-byte file is no longer storable
 
 Separate from the cause, `stop()` was wrong. It guarded `bytes == 0`, and 28
