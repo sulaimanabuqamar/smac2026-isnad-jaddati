@@ -454,3 +454,71 @@ so the `onUpgrade` wiring is exercised and not just the SQL.
 **Not yet verified:** the fix on a device. The bug needs two installs to
 appear and so does its fix. `docs/slice2-unverified.md` says so in those
 words rather than calling the item closed.
+
+---
+
+## 2026-09-04 — Sulaiman — Claude Code (CLI) — the 28-byte recording
+
+**Prompt:** first, "Playback still fails on a freshly recorded segment, on
+device. [...] Change the catch to log the exception, the relative path, and
+the resolved absolute path, and also log whether the file exists and its
+length at that moment. [...] Do not guess a fix from reading. Get the real
+error first."
+
+Then, after running it: "Found it. Every recorded file is exactly 28 bytes —
+an empty m4a container. The mic is capturing nothing. Playback's 'Cannot
+Open' and the transcription failures are one bug, not two. [...] Likely
+cause, to verify before you fix: record and just_audio are both touching
+AVAudioSession. [...] Verify first: log the AVAudioSession category and
+whether the permission actually returned granted, at the moment start() is
+called. Confirm the diagnosis before writing the fix. [...] Second thing,
+separately: stop() guards against bytes == 0 and lets 28 through."
+
+**What we did with it:**
+
+**The instruction not to guess was the whole value of the round.** The
+previous entry describes a fix written from a correct diagnosis. This one
+started from a wrong assumption — that playback was a path problem — and the
+logging killed it in one run. The path work was verified *correct* by the
+same output that found the real bug: relative stored, resolved right, file
+present in the right directory, 28 bytes long.
+
+**Two bugs were being read as one, and one bug was being read as two.**
+Playback failing and transcription failing were the same empty file. The
+28-byte file and the guard that let it through were separate problems, and
+only the second is fixed here.
+
+**The session-category fix is deliberately not written.** The `playAndRecord`
+explanation has a good story behind it and no evidence yet, and this session
+cannot run the app on the phone. Writing the fix now would be the exact thing
+the prompt ruled out. `AudioService._logSessionState` logs the category, mode,
+options and the OS-level `AVAudioSessionRecordPermission` before *and* after
+`_recorder.start()` — before and after because whether `record` sets the
+category itself is precisely the question.
+
+**`audio_session` declared as a direct dependency.** It was already in the
+tree under `just_audio`, so it costs nothing new to ship, but a package we
+call into directly should be one we have named in the spec table and can
+defend. Seven dependencies.
+
+**The guard, fixed independently.** `stop()` tested `bytes == 0`; 28 bytes
+went straight past it. It now requires 1024 bytes — thirty-six times the dead
+file, a fraction of any real one — and returns a sealed `RecordingResult`
+rather than a nullable `Recording`, so the save path is unreachable without
+handling the failure. The user is told the microphone picked nothing up,
+which points somewhere different from "did not save".
+
+**One argument with the brief, and it changed the design.** The instruction
+was to delete the four dead segments. A sweep that deletes rows whose audio
+is missing would have wiped the entire archive during last week's reinstall
+bug, when every file on the phone appeared absent. So the sweep only removes
+rows whose file it can **open and measure** below the minimum; a missing file
+is left alone. There is a test named after that, and it is the most important
+test in the file.
+
+**Verification:** `flutter analyze` clean, `flutter test` 93 passing (80
+before, 13 new), `flutter build apk --debug` succeeds. The sweep is tested
+including the exact four-dead-rows case, both boundary sizes, idempotence,
+and the missing-file safety property. **The session diagnostics have not been
+read off a device** — that is the next thing, and no fix should be written
+before they are.

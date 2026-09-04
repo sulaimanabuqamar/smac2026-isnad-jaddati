@@ -21,17 +21,60 @@ The install itself, and then the whole recording path:
 | The app installs on a real iPhone and launches | **works** |
 | `NSMicrophoneUsageDescription` is present and correct | **works** — the permission dialog appears, and the app does not terminate silently, which was the failure mode we most feared |
 | Granting the microphone reaches the interview screen | **works** |
-| `AudioRecorder.start` with AAC-LC, 16 kHz, mono | **works** — the encoder accepts our config on real hardware |
+| `AudioRecorder.start` with AAC-LC, 16 kHz, mono | **starts without error** — but see below: it captured nothing |
 | A file appears under the app documents directory | **works** |
-| `stop()` returns a file with bytes in it | **works** |
+| `stop()` returns a file with bytes in it | **NO** — every file was 28 bytes, an empty container |
 | A segment row is written after the file, never before | **works** — the D1 ordering holds in practice, not just in argument |
 | Recordings and rows survive closing and reopening the app | **works** |
 | The question chain advances through the bank, one question per answer | **works** |
 | The offline queue banner appears with no signal, and the answers still save | **works** — this is the demo described in `docs/qa-slice3.md` |
 
-That is the great majority of what the old file listed as unknown. The
-riskiest item on it — iOS terminating the app instantly over a missing usage
-string — did not happen.
+The riskiest item on the old list — iOS terminating the app instantly over a
+missing usage string — did not happen.
+
+**Read the two rows marked in bold before drawing any comfort from the rest.**
+The recording path starts, writes a file, and orders its database write
+correctly. It has never once captured audio.
+
+## Verified broken: the microphone captured nothing
+
+**Every recording the device made was exactly 28 bytes** — an m4a container
+with a header and no frames behind it. Nothing was ever captured.
+
+This is one bug wearing two faces. Playback failed with "Cannot Open" because
+there is nothing in the file to decode, and transcription failed for the same
+reason. We spent a round chasing them as separate problems; they are the same
+empty file.
+
+**Suspected cause, not yet confirmed.** `record` and `just_audio` both touch
+`AVAudioSession`. `just_audio` configures it for playback, and if the session
+is not in `playAndRecord` when `record` starts, iOS hands the encoder silence
+and it dutifully writes a header with no audio under it. Diagnostics are now
+in `AudioService.start` logging the category, mode, options and the OS-level
+record permission, before and after the recorder starts. **The fix is not
+written yet, because the diagnosis is not confirmed yet.**
+
+## Fixed regardless: a 28-byte file is no longer storable
+
+Separate from the cause, `stop()` was wrong. It guarded `bytes == 0`, and 28
+bytes walked straight past it, so four segments were written that will never
+play and never transcribe.
+
+A container with no frames is not a short recording, it is a failed one, and
+storing it is worse than losing it: it looks to the user like something that
+saved. The guard is now a real minimum — 1024 bytes, thirty-six times the
+dead file and a fraction of any real one — and `stop()` returns a typed
+result rather than a null, so the save path cannot be reached without
+handling the failure. The user is told the microphone picked nothing up,
+which is a different sentence from "did not save" and points somewhere
+different.
+
+The four dead rows are swept at startup, along with their files. The sweep
+**only deletes rows whose file it can open and measure**. A row whose file is
+merely missing is left alone, deliberately: missing is exactly what the
+reinstall bug looked like, and a sweep that deleted on absence would have
+destroyed the entire archive that morning instead of fixing it. There is a
+test named after that.
 
 ## Verified broken, and now fixed
 
@@ -78,7 +121,21 @@ are different words on purpose.
 
 Shorter than it was, and these are what to hammer next.
 
-### 1. The fix, on a second install
+### 0. The 28-byte recording — the live bug
+
+- [ ] **What `AVAudioSession` category is actually set when `start()` runs.**
+      The diagnostics are in and have not yet been read off a device. Until
+      they are, the `playAndRecord` explanation is a hypothesis with a good
+      story behind it and no evidence.
+- [ ] Whether `record.hasPermission()` and the OS's own
+      `AVAudioSessionRecordPermission` agree. If they disagree, this is a
+      different bug entirely.
+- [ ] Whether `record` sets the category itself — hence logging before *and*
+      after `start()`.
+- [ ] A recording with actual audio in it. Nothing on this phone has ever
+      produced one.
+
+### 1. The reinstall fix, on a second install
 
 - [ ] Install, record, reinstall, play back. This is the exact sequence that
       exposed the bug and the only thing that can confirm the fix.
@@ -144,10 +201,17 @@ Shorter than it was, and these are what to hammer next.
 
 ## What this run was worth
 
-Nine of the ten things the old file called unknown turned out to work. The
-tenth was broken in a way that would have appeared for the first time in front
-of a judge — on the second install of the week, with a phone full of
-recordings that all looked lost.
+Two real defects, neither of which any test on a laptop could have found.
 
-That is the argument for the whole practice: the list existed, we ran it, and
-it found the one defect that no amount of testing on a laptop could have.
+The first was the reinstall bug: it needs two installs and a container that
+moves. The second is worse and is still open — **the microphone has never
+captured anything on this device**, and every green tick in the recording
+path above was measuring that a file appeared, not that there was audio in
+it. `stop()` checked `bytes == 0` and a 28-byte header satisfied it, so the
+app reported success four times over silence.
+
+That is the more uncomfortable lesson of the two. The tests were right, the
+build was clean, the file was there, the row was written, and the ordering
+guarantee we are proudest of held perfectly — around nothing at all. A
+verification that only asks "did a file appear" will answer yes to an empty
+container.
