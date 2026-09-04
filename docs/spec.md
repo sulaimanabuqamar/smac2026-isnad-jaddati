@@ -95,6 +95,14 @@ bank_question (id, topic, text_ar, text_en)        -- seeded from assets
 and flushed before `transcribe_status` is ever set — that ordering is the
 reliability guarantee.
 
+**`audio_path` is relative to the app documents directory**, never absolute,
+and is resolved with `AudioFiles.resolve` at the moment the file is needed.
+Schema version 1 stored the absolute path; on iOS the app container is a UUID
+that changes on every install, so after a rebuild every row pointed into the
+previous install's directory and every recording looked lost. Schema version 2
+migrates those rows by stripping the prefix rather than deleting them. A test
+pins the invariant: a stored `audio_path` never begins with `/`.
+
 ## 9. AI boundary
 
 | Operation | Where | Why |

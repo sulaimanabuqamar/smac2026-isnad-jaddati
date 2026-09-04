@@ -393,3 +393,64 @@ Slices 1–2, 28 new), `flutter build apk --debug` succeeds, and the live Groq
 call above. **Still nothing has run on a phone** — `docs/slice3-unverified.md`
 lists what that leaves open, and every item in `docs/slice2-unverified.md` is
 still open too.
+
+---
+
+## 2026-09-04 — Sulaiman — Claude Code (CLI) — the reinstall bug
+
+**Prompt:** "Bug found on device: recordings are unplayable after any
+reinstall. audio_service.dart stores an absolute path in audio_path. On iOS
+the app container UUID changes on every install, so all prior audio_path
+values are dead after a rebuild. [...] Fix: store the path RELATIVE to the
+documents directory [...] Add one helper both AudioService and the queue use;
+no caller should ever touch a raw absolute path again. Bump the schema version
+and migrate existing rows by stripping everything up to and including
+'/Documents/'. Keep it, don't wipe [...] Add a test that pins the invariant: a
+stored audio_path must never begin with '/'."
+
+**The diagnosis was ours, not the AI's.** The bug was found by running Slice 2
+on the phone, and the cause — the iOS container UUID — was identified before
+any of this was typed. Worth recording accurately: this entry is AI
+implementing a fix that a device run and a human diagnosis had already
+specified.
+
+**Output — files AI wrote:** `lib/services/audio_files.dart`, the changes to
+`audio_service.dart`, `db.dart` (schema version 2 and the migration),
+`transcription_queue.dart`, `interview_screen.dart` and `segment.dart`, plus
+`test/audio_path_test.dart` (14 tests). Rewrote `docs/slice2-unverified.md`
+around the device run and updated `docs/slice3-unverified.md` and
+`docs/spec.md` §8.
+
+**What we did with it:**
+
+**One correction to the brief.** The instruction said to strip up to and
+including `/Documents/`. That is the iOS marker; Android's documents
+directory is `app_flutter` and would not have matched, leaving those rows
+absolute and broken. The migration handles both markers. Android is not a
+platform we demo, but the line cost nothing and a wrong guess later would cost
+recordings.
+
+**A testability problem the fix created, and the fix for it.** Resolving a
+path calls `getApplicationDocumentsDirectory`, which needs a platform channel
+— so the moment the queue resolved its own paths, every queue test failed for
+want of a device. The resolver is now injected into `TranscriptionQueue` the
+same way the HTTP client is injected into `TranscriptionService`. That is the
+second time this week the answer was a seam rather than a mock, and it is
+worth noticing as a pattern: the parts of this app that can fail are the parts
+that talk to a platform, and every one of them is now passed in.
+
+**Fixtures that contradicted the invariant were changed too.** Two older tests
+wrote `'/tmp/seg_1.m4a'` as an `audio_path`. Harmless to those tests, but a
+fixture that violates a documented invariant is a trap for whoever reads it
+next, so they now use relative paths with a comment pointing at
+`test/audio_path_test.dart`.
+
+**Verification:** `flutter analyze` clean, `flutter test` 80 passing (66
+before, 14 new), `flutter build apk --debug` succeeds. The new tests cover the
+invariant, both platforms' markers, the migration's idempotence, that it keeps
+rows rather than wiping them, and a real version 1 → version 2 database reopen
+so the `onUpgrade` wiring is exercised and not just the SQL.
+
+**Not yet verified:** the fix on a device. The bug needs two installs to
+appear and so does its fix. `docs/slice2-unverified.md` says so in those
+words rather than calling the item closed.

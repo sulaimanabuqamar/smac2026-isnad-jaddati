@@ -4,9 +4,15 @@ Written 4 September 2026, the day Slice 3 was built. Same discipline as
 `docs/slice2-unverified.md`: the distinction is between **verified** and
 **written**, and "it compiles" is not allowed to stand in for "it works".
 
-Slice 3 is the first slice where a meaningful part of the risk *was*
-retired before the commit, so this list is shorter than Slice 2's — but the
-Slice 2 list is still open and still the more dangerous of the two.
+Slice 3 is the first slice where a meaningful part of the risk *was* retired
+before the commit.
+
+**Updated the same day, after the device run.** Slice 2 has now been executed
+on an iPhone, which unblocks part of this list — the offline banner in
+particular — and which found the reinstall bug described in
+`docs/slice2-unverified.md`. That bug broke this slice too: a segment whose
+audio could not be found was marked permanently failed. Both halves are fixed
+by the same change.
 
 ---
 
@@ -21,7 +27,9 @@ Slice 2 list is still open and still the more dangerous of the two.
 | Every HTTP branch does the right thing to a row | `flutter test` through `MockClient` — 200, 400, 429, 503, dead socket |
 | The transcript SQL, including the correction guard | `flutter test` against real SQLite |
 | The queue's retry decisions | `flutter test` — drains, stops on transient, marks permanent, carries on |
-| 66 tests, analyze clean, debug APK builds | `flutter test`, `flutter analyze`, `flutter build apk --debug` |
+| The offline banner and queueing, on the phone | device run, 4 September — recorded with no signal, answers saved, banner correct |
+| `audio_path` is never stored absolute, and old rows migrate | `flutter test` — the invariant, the SQL, and a real version 1 → 2 reopen |
+| 80 tests, analyze clean, debug APK builds | `flutter test`, `flutter analyze`, `flutter build apk --debug` |
 
 The endpoint verification is the important one. It means the single most
 likely way Slice 3 fails on a phone — a wrong model name, a rejected
@@ -32,12 +40,12 @@ this machine.
 
 ## Never executed
 
-### 1. The whole path on a device (inherits every Slice 2 unknown)
+### 1. Transcription on a device
 
-Nothing here has run on hardware, because **nothing in Slice 2 has run on
-hardware either**. `docs/slice2-unverified.md` is unchanged and remains the
-first thing to hammer: the microphone permission, the file write, playback,
-and the iOS build. Slice 3 cannot be observed until Slice 2 is.
+Slice 2 now runs on hardware, so this is no longer blocked. What has been
+seen on the phone is the queue's *offline* behaviour — the banner appears
+with no signal and the answers save anyway. What has not been seen is a
+transcript arriving.
 
 - [ ] A real recording made by `AudioService` — 16 kHz mono AAC, not
       macOS `say` output — is accepted by Groq. The container is confirmed;
@@ -47,6 +55,8 @@ and the iOS build. Slice 3 cannot be observed until Slice 2 is.
       real length.
 - [ ] Real Arabic from a real grandmother, in a real room. Every transcript
       we have seen came from a spike dataset or a synthetic voice.
+- [ ] A transcript appearing under an answer on the phone. The path from a
+      200 response to text on screen has only ever run in tests.
 
 ### 2. The queue over time
 
@@ -86,7 +96,10 @@ and the iOS build. Slice 3 cannot be observed until Slice 2 is.
 - [ ] Long Arabic transcripts in a card. Nothing truncates them, deliberately,
       so a two-minute answer makes a tall row. Whether that scrolls acceptably
       on a phone is unmeasured.
-- [ ] The offline banner appearing and disappearing as signal comes and goes.
+- [x] **The offline banner, with no signal, on the device — verified.** The
+      answers saved and the banner said how many were waiting.
+- [ ] The banner *disappearing* as signal comes back, and the transcripts
+      filling in behind it. Only the offline half was seen.
 - [ ] "Try again" on a failed segment, tapped by a finger rather than called
       by a test.
 - [ ] Whether `_onQueueChanged` re-reading the whole session on every
@@ -121,8 +134,14 @@ The network half of Slice 3 is better verified than any code we have written
 so far, because the API contract was checked against the live service instead
 of being asserted. The database half is covered by 66 tests.
 
-The gap is the same gap as yesterday: **none of it has been observed on a
-phone**, and the reason is that Slice 2 has not been either. Every item on
-`docs/slice2-unverified.md` is still open, and until the microphone works on
-a device, a working transcription pipeline is a working transcription
-pipeline for files that nothing on a phone has yet produced.
+The gap has narrowed but not closed. Slice 2 now runs on a phone, and the
+queue's offline behaviour was seen there — which is the half of this slice
+that matters most for the reliability rule. What has still never happened on
+a device is a transcript coming *back*: no recording made by our own encoder
+has been sent to Groq, and no Arabic has appeared under an answer on screen.
+
+The device run also cost this slice a defect. A segment whose audio could not
+be located was marked permanently failed, so the reinstall bug in
+`docs/slice2-unverified.md` was quietly destroying transcription state as
+well as playback. That is worth saying plainly: the two failures looked
+unrelated on screen and were one line of code.
